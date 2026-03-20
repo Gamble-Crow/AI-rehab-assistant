@@ -12,14 +12,14 @@ DANH_SACH_BAI_TAP = {
     },
     "squat_phuc_hoi": {
         "ten": "Squat tri lieu (Chan Trai)",
-        "khop_can_do": (11, 13, 15), # Hong -> Dau goi (Dinh) -> Mat ca
+        "khop_can_do": (11, 13, 15), # hong - dau goi-mat ca
         "nguong_duoi": 160,          # dung thang
         "nguong_gap": 100            # ngoi xuong 
     }
 }
 
 def calculate_angle(a, b, c):
-    """Tinh goc 2D giua 3 diem. b la dinh cua goc."""
+    """tinh goc Oxy giua 2 diem. b la dinh cua goc."""
     radians = math.atan2(c[1]-b[1], c[0]-b[0]) - math.atan2(a[1]-b[1], a[0]-b[0])
     angle = abs(radians * 180.0 / math.pi)
     if angle > 180.0: angle = 360 - angle
@@ -40,13 +40,13 @@ counter = 0
 stage = "DOWN" # down=ngoi, up=dung
 prev_time = time.time()
 
-print(f"He thong san sang! Dang chay bai tap: {thong_tin_bai['ten']}")
+print(f"He thong san sang. Dang chay bai tap: {thong_tin_bai['ten']}")
 
 while cap.isOpened():
     ret, frame = cap.read()
     if not ret: break
 
-    # Chay YOLO du doan (giam conf xuong 0.5 de bat nhay hon)
+    # chay model du doan
     results = model(frame, stream=True, imgsz=320, conf=0.85, verbose=False)
     
     for r in results:
@@ -91,7 +91,7 @@ while cap.isOpened():
                     cv2.putText(annotated_frame, f"SO LAN: {counter}", (220, 110), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
 
         # Hien thi
-        cv2.imshow('AI Phuc Hoi Chuc Nang - YOLO Core', annotated_frame)
+        cv2.imshow('Practice vision', annotated_frame)
 
     # 'q' de thoat
     if cv2.waitKey(1) & 0xFF == ord('q'): 
