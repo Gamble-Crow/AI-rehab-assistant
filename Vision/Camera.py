@@ -3,21 +3,18 @@ import math
 import time
 from ultralytics import YOLO
 
-# =====================================================================
-# KHO DU LIEU: BAI TAP & NGUONG DANH GIA (THRESHOLDS)
-# =====================================================================
 DANH_SACH_BAI_TAP = {
     "gap_khuyu_tay": {
         "ten": "Gap khuyu tay (Trai)",
-        "khop_can_do": (5, 7, 9), # Vai -> Khuyu (Dinh) -> Co tay
+        "khop_can_do": (5, 7, 9), # vai - khuyu -tay
         "nguong_duoi": 150,       # Goc khi tay duoi thang ra
         "nguong_gap": 60          # Goc khi tay gap vao dat chuan
     },
     "squat_phuc_hoi": {
         "ten": "Squat tri lieu (Chan Trai)",
         "khop_can_do": (11, 13, 15), # Hong -> Dau goi (Dinh) -> Mat ca
-        "nguong_duoi": 160,          # Goc khi dung thang
-        "nguong_gap": 100            # Goc khi ngoi xuong ghe (ngoi xom)
+        "nguong_duoi": 160,          # dung thang
+        "nguong_gap": 100            # ngoi xuong 
     }
 }
 
@@ -28,19 +25,19 @@ def calculate_angle(a, b, c):
     if angle > 180.0: angle = 360 - angle
     return angle
 
-# --- KHOI TAO HE THONG ---
-model = YOLO('yolov8n-pose.pt') # Khuyen nghi dung v8 nano pose cho on dinh
-video_source = "http://192.168.5.73:4747/video" # Dung 0 de test Webcam truoc, dien link IP camera cua may vao sau
+# init
+model = YOLO('yolov8n-pose.pt')
+video_source = "http://192.168.5.73:4747/video" 
 cap = cv2.VideoCapture(video_source)
 
-# --- CHON BAI TAP ---
-bai_tap_hien_tai = "squat_phuc_hoi" # Thu doi thanh "gap_khuyu_tay"
+# chon bai tap
+bai_tap_hien_tai = "squat_phuc_hoi"
 thong_tin_bai = DANH_SACH_BAI_TAP[bai_tap_hien_tai]
 khop_1, khop_2, khop_3 = thong_tin_bai["khop_can_do"]
 
-# --- BIEN DIEU KHIEN "BO NAO" DEM REPS ---
+# Nao Dem Rep
 counter = 0
-stage = "DOWN" # DOWN: Dang gap/ngoi | UP: Dang duoi/dung
+stage = "DOWN" # down=ngoi, up=dung
 prev_time = time.time()
 
 print(f"He thong san sang! Dang chay bai tap: {thong_tin_bai['ten']}")
@@ -53,11 +50,11 @@ while cap.isOpened():
     results = model(frame, stream=True, imgsz=320, conf=0.85, verbose=False)
     
     for r in results:
-        annotated_frame = r.plot() # YOLO tu ve khung xuong len hinh
+        annotated_frame = r.plot() # ve khung xuong
         
-        # Kiem tra xem YOLO co nhin thay nguoi va cac khop khong
+        # kiem tra YOLO co nhin thay nguoi va cac khop khong
         if r.keypoints is not None and len(r.keypoints.xy) > 0:
-            # Lay toa do pixel thuc te thay vi toa do normalize
+            # Lay toa do pixel thuc te
             kps = r.keypoints.xy[0].cpu().numpy() 
             
             # Dam bao mang du dai chua cac khop can thiet
@@ -66,27 +63,27 @@ while cap.isOpened():
                 p2 = kps[khop_2]
                 p3 = kps[khop_3]
                 
-                # YOLO tra ve [0, 0] neu bi che khuat khop do. Ta phai loai tru.
+                # che khuat khop do -> loai
                 if (p1[0] != 0 and p1[1] != 0) and \
                    (p2[0] != 0 and p2[1] != 0) and \
                    (p3[0] != 0 and p3[1] != 0):
                     
-                    # 1. Tinh toan Goc
+                    # 1. goc
                     angle = calculate_angle(p1, p2, p3)
                     
-                    # 2. LOGIC DEM REPS (MAY TRANG THAI)
-                    # Neu goc vuot nguong duoi thang (Vi du dung len > 160 do)
+                    # 2. trang thai
+                    # Neu goc vuot nguong duoi thang
                     if angle > thong_tin_bai["nguong_duoi"]:
-                        if stage == "DOWN":  # Chi dem khi truoc do dang ngoi
+                        if stage == "DOWN":  # dem chi khi ngoi
                             counter += 1
                             print(f"-> Hoan thanh rep thu: {counter}")
                         stage = "UP"
                     
-                    # Neu goc nho hon nguong gap (Vi du ngoi xuong < 100 do)
+                    # Neu goc nho hon nguong gap
                     if angle < thong_tin_bai["nguong_gap"]:
                         stage = "DOWN"
 
-                    # 3. Ve UI hien thi thong so chen len video
+                    # 3.hien thi thong 
                     cv2.rectangle(annotated_frame, (0,0), (450, 150), (30, 30, 30), -1)
                     cv2.putText(annotated_frame, f"BAI TAP: {thong_tin_bai['ten']}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                     cv2.putText(annotated_frame, f"GOC: {int(angle)}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
@@ -96,7 +93,7 @@ while cap.isOpened():
         # Hien thi
         cv2.imshow('AI Phuc Hoi Chuc Nang - YOLO Core', annotated_frame)
 
-    # Bam 'q' de thoat
+    # 'q' de thoat
     if cv2.waitKey(1) & 0xFF == ord('q'): 
         break
         
