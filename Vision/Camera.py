@@ -12,7 +12,7 @@ DANH_SACH_BAI_TAP = {
     },
     "squat_phuc_hoi": {
         "ten": "Squat tri lieu (Chan Trai)",
-        "khop_can_do": (11, 13, 15), # Hong -> Dau goi (Dinh) -> Mat ca
+        "khop_can_do": (11, 13, 15), # hong - dau goi-mat ca
         "nguong_duoi": 160,          # dung thang
         "nguong_gap": 100            # ngoi xuong 
     }
@@ -46,7 +46,7 @@ while cap.isOpened():
     ret, frame = cap.read()
     if not ret: break
 
-    # Chay YOLO du doan (giam conf xuong 0.5 de bat nhay hon)
+    # chay model du doan
     results = model(frame, stream=True, imgsz=320, conf=0.85, verbose=False)
     
     for r in results:
