@@ -9,7 +9,6 @@ import time
 import urllib.request
 import os
 
-# CẤU HÌNH HIỂN THỊ 
 DISPLAY_CONFIG = {
     "show_exercise_name":   True,
     "show_rep_count":       True,
@@ -23,37 +22,34 @@ DISPLAY_CONFIG = {
     "show_confidence":      False,
 }
 
-#bai tap mac dinh khi run
-DEFAULT_EXERCISE = "squat"
+DEFAULT_EXERCISE = "Gap/duoi khuyu tay"
 
-# cau hinh camera
 CAMERA_INDEX = 0
 FRAME_WIDTH  = 1280
 FRAME_HEIGHT = 720
 
-#
-#  Thông số bài tập
-#  joints: 3 điểm tính góc góc (a, b, c) — b là đỉnh góc
+#   ĐỊNH NGHĨA BÀI TẬP 
+#  joints: 3 landmark index đe tinh goc (a, b, c)
 #
 #  Index MediaPipe 0.10.x:
-#    11=left_shoulder  12=right_shoulder
-#    13=left_elbow     14=right_elbow
-#    15=left_wrist     16=right_wrist
-#    23=left_hip       24=right_hip
-#    25=left_knee      26=right_knee
-#    27=left_ankle     28=right_ankle
-#
+#    11=vai phải        12=vai trái
+#    13=khuỷu tay phải  14=khuỷu tay trái
+#    15=cổ tay phải     16=cổ tay trái
+#    23=hông phải       24=hông trái
+#    25=đầu gối phải    26=đầu gối trái
+#    27=cổ chân phải    28=cổ chân trái
+
 EXERCISES = {
     "squat": {
         "name":        "SQUAT (Dung len ngoi xuong)",
-        "joints":      (23, 25, 27),   # left_hip, left_knee, left_ankle
+        "joints":      (23, 25, 27),   
         "down_angle":  90,
         "up_angle":    160,
         "description": "Dung thang -> Ngoi xuong (goi 90 do) -> Dung len",
     },
     "pushup": {
         "name":        "PUSH-UP (Hit dat)",
-        "joints":      (11, 13, 15),   # left_shoulder, left_elbow, left_wrist
+        "joints":      (11, 13, 15),   
         "down_angle":  70,
         "up_angle":    160,
         "description": "Nam sap -> Ha nguoi xuong -> Day len",
@@ -65,24 +61,16 @@ EXERCISES = {
         "up_angle":    160,
         "description": "Dung thang -> Buoc 1 chan -> Ha thap nguoi",
     },
-    "situp": {
-        "name":        "SIT-UP (Gap bung)",
-        "joints":      (11, 23, 25),   # left_shoulder, left_hip, left_knee
-        "down_angle":  55,
-        "up_angle":    120,
-        "description": "Nam ngua -> Gap nguoi len -> Nam xuong",
+    "Gap/duoi khuyu tay":{
+    "name":        "Gap/duoi khuyu tay",
+    "joints":       (12,14,16),
+    "down_angle":   35,
+    "up_angle":     165,
+    "description": "Gap khuyu tay. Tay đe tren mat phang",
     },
-    # Them bai tap moi o day:
-    # "bicep_curl": {
-    #     "name":       "BICEP CURL (Curl tay)",
-    #     "joints":     (11, 13, 15),
-    #     "down_angle": 160,
-    #     "up_angle":   30,
-    #     "description": "Tay thang -> Cuon len -> Tha xuong",
-    # },
 }
 
-# Danh sách các cặp nối xương để vẽ xương
+# Danh sach cac cap noi xưong
 POSE_CONNECTIONS = [
     (11,12),(11,13),(13,15),(12,14),(14,16),
     (11,23),(12,24),(23,24),
@@ -90,7 +78,6 @@ POSE_CONNECTIONS = [
     (27,29),(28,30),(29,31),(30,32),
 ]
 
-# màu sắc
 C = {
     "white":    (255, 255, 255),
     "black":    (0,   0,   0),
@@ -105,7 +92,6 @@ C = {
     "joint":    (0,   140, 255),
 }
 
-# tinh goc
 def calc_angle(a, b, c):
     a = np.array(a); b = np.array(b); c = np.array(c)
     ba = a - b; bc = c - b
@@ -142,8 +128,6 @@ def ensure_model(path="pose_landmarker_full.task"):
     print(f"[INFO] Da tai xong: {path}")
     return path
 
-
-# workoutTracker
 class WorkoutTracker:
 
     def __init__(self):
@@ -151,7 +135,7 @@ class WorkoutTracker:
         print("[INFO] Dang tai YOLO model...")
         self.yolo = YOLO("yolov8n.pt")
 
-        # mediaPipe 0.10.x — tasks api
+        # MediaPipe 0.10.x — Tasks API
         print("[INFO] Dang khoi dong MediaPipe Pose (0.10.x Tasks API)...")
         model_path = ensure_model()
         base_opts  = mp_python.BaseOptions(model_asset_path=model_path)
@@ -165,20 +149,20 @@ class WorkoutTracker:
         )
         self.landmarker = PoseLandmarker.create_from_options(opts)
 
-        # trạng thái
+        # Trạng thái
         self.ex_keys    = list(EXERCISES.keys())
         self.cur_idx    = self.ex_keys.index(DEFAULT_EXERCISE) if DEFAULT_EXERCISE in EXERCISES else 0
         self.reps       = {k: 0    for k in EXERCISES}
         self.stages     = {k: None for k in EXERCISES}
         self.angle      = 0.0
 
-        # thời gian
+        # Timer
         self.t0          = time.time()
         self.paused      = False
         self.pause_acc   = 0.0
         self.pause_start = 0.0
 
-        # fps
+        # FPS
         self.fps         = 0
         self.ftimes      = []
 
@@ -258,7 +242,7 @@ class WorkoutTracker:
         H, W = frame.shape[:2]
         k = self.ck
 
-        # Panel chính
+        # Panel chinh
         rounded_rect(frame, 10, 10, 300, 215, 12, C["bg"], 0.75)
         y = 45
 
@@ -288,7 +272,7 @@ class WorkoutTracker:
         if DISPLAY_CONFIG["show_fps"]:
             txt(frame, f"FPS: {self.fps}", (W-120, 35), 0.65, C["white"], 2)
 
-        # angle bar
+        # Angle bar
         ex = self.ce
         bx, by, bw, bh = 20, H-50, 260, 16
         norm   = np.clip((self.angle - ex["down_angle"]+10) / (ex["up_angle"]-ex["down_angle"]+20), 0, 1)
@@ -299,12 +283,12 @@ class WorkoutTracker:
         cv2.rectangle(frame, (bx,by), (bx+filled,by+bh), bc, -1)
         txt(frame, "Angle range", (bx, by-8), 0.45, C["white"], 1)
 
-        # hướng dẫn
+        # Huong dan
         if DISPLAY_CONFIG["show_instructions"]:
             for i, t in enumerate(["Q/ESC: Thoat", "N: Tiep  P: Truoc", "R: Reset  Space: Pause"]):
                 txt(frame, t, (20, H-95+i*18), 0.42, C["white"], 1)
 
-        # danh sách bài tập
+        # Danh sach bai tap
         pw = 230; rh = 26; pad = 10
         n  = len(EXERCISES)
         px = W - pw - 10; py = H - n*rh - pad*2 - 10
@@ -317,64 +301,33 @@ class WorkoutTracker:
             txt(frame, f"{'> ' if isc else '  '}{sn}  [{self.reps[ek]}]",
                 (px+10, ey), 0.48, col, 1)
 
-        # báo xanh khi rep mới
+        # Flash xanh khi rep moi
         if flash:
             ov = frame.copy()
             cv2.rectangle(ov, (0,0), (W,H), C["green"], -1)
             cv2.addWeighted(ov, 0.12, frame, 0.88, 0, frame)
 
     def run(self):
-        # --- mở camera với backend DirectShow (Windows) cho camera USB ---
-        print(f"[INFO] Dang mo camera {CAMERA_INDEX}...")
-        cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)  # chọn camera 
-        if not cap.isOpened():
-            print("[INFO] Thu lai khong dung CAP_DSHOW...")
-            cap = cv2.VideoCapture(1)  # fallback không dùng backend
-
-        if not cap.isOpened():
-            print(f"[LOI] Khong mo duoc camera {CAMERA_INDEX}.")
-            print("      Kiem tra lai ket noi camera hoac doi CAMERA_INDEX.")
-            return
-
-        # cấu hình camera
+        cap = cv2.VideoCapture (CAMERA_INDEX)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH,  FRAME_WIDTH)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)   # giảm buffer lag
 
-        # khởi động: đọc vài frame đầu để camera ổn định
-        print("[INFO] Dang khoi dong camera (warm-up)...")
-        for _ in range(5):
-            cap.read()
-            time.sleep(0.05)
+        if not cap.isOpened():
+            print("[LOI] Khong mo duoc camera."); return
 
-        # kiểm tra đọc được frame chưa
-        ret, test_frame = cap.read()
-        if not ret or test_frame is None:
-            print(f"[LOI] Camera {CAMERA_INDEX} mo duoc nhung khong doc duoc frame.")
-            print("      Thu doi CAMERA_INDEX = 0.")
-            cap.release()
-            return
-
-        actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        print(f"[INFO] Camera san sang: {actual_w}x{actual_h}")
-
-        print("\n**************************************")
+        print("\n=")
         print("  AI WORKOUT TRACKER san sang!")
         print("  N / P  -> Doi bai tap")
         print("  R      -> Reset rep")
         print("  Space  -> Pause")
         print("  Q/ESC  -> Thoat")
-        print("**************************************\n")
+        print("=\n")
 
         flash_n = 0
 
         while True:
             ret, frame = cap.read()
-            if not ret or frame is None:
-                # camera USB doi khi drop frame — bo qua thay vi thoat
-                time.sleep(0.01)
-                continue
+            if not ret: break
             frame = cv2.flip(frame, 1)
             self.update_fps()
 
@@ -386,7 +339,7 @@ class WorkoutTracker:
                 elif key == ord(' '): self.toggle_pause()
                 continue
 
-            # yOLO
+            # YOLO
             best_box  = None; best_conf = 0.0
             yres      = self.yolo(frame, classes=[0], verbose=False)[0]
             for box in yres.boxes:
@@ -401,7 +354,7 @@ class WorkoutTracker:
                 if DISPLAY_CONFIG["show_confidence"]:
                     txt(frame, f"{best_conf:.2f}", (x1,y1-8), 0.55, C["accent"], 2)
 
-            # mediaPipe
+            # MediaPipe
             lms, wc, hc, off = self.detect_pose(frame, best_box)
             new_rep = False
 
@@ -418,7 +371,7 @@ class WorkoutTracker:
                 new_rep    = self.count_rep(self.angle)
                 if new_rep: flash_n = 5
 
-                # Vẽ góc
+                # Ve goc
                 cv2.line(frame, pb, pa, C["yellow"], 2)
                 cv2.line(frame, pb, pc, C["yellow"], 2)
                 cv2.circle(frame, pb, 8, C["yellow"], -1)
@@ -440,12 +393,12 @@ class WorkoutTracker:
 
         cap.release()
         cv2.destroyAllWindows()
-        print("\n========== KET QUA BUOI TAP ==========")
+        print("\n= KET QUA BUOI TAP =")
         print(f"Thoi gian: {fmt_time(self.elapsed())}")
         for k, v in EXERCISES.items():
             if self.reps[k] > 0:
                 print(f"  {v['name']}: {self.reps[k]} rep")
-        print("=======================================\n")
+        print("\n")
 
 if __name__ == "__main__":
     tracker = WorkoutTracker()
