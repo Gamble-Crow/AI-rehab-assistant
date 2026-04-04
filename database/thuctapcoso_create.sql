@@ -90,8 +90,8 @@ CREATE TABLE Exercise_adjustment (
     current_set_count INT NOT NULL,
     current_rep_per_set INT NOT NULL,
 
-    adjustment_action NVARCHAR(20) NULL,
-    adjustment_target NVARCHAR(20) NULL,
+    adjustment_action NVARCHAR(20) NULL, -- điều chỉnh như thế nào (tăng/giảm/giữ nguyên)
+    adjustment_target NVARCHAR(20) NULL, -- điều chỉnh cái gì (set/rep)
     adjustment_value INT NULL,
 
     next_set_count INT NULL,
