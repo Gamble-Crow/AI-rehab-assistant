@@ -1,203 +1,220 @@
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
-import speech_recognition as sr
+import sounddevice as sd
+import numpy as np
+import queue
 import threading
-import time
-import pyodbc
-from datetime import datetime
+import re
 
-#du lieu nhan dien
-PAIN_KEYWORDS = ["đau", "au", "ow", "ouch", "pain"]  # tu khoa nhan dien
-PATIENT_ID    = 1        # ID benh nhan
-DEVICE_INDEX  = None     # None = mic mac dinh, doi thanh 0/1/2 neu can
-
-#config ket noi sql
-SQL_CONFIG = {
-    "server":   r"LAPTOP-OIUIOQ6B\CLCCSDLPTNHOM4",                    # ten server hoac IP
-    "database": "thuc_tap_co_so",                    # ten database
-    "use_windows_auth": True,
-    "driver":   "ODBC Driver 17 for SQL Server",
-}
+#faster-whisper 
+from faster_whisper import WhisperModel
 
 
-class PainCounter:
+# cài đặt
+SAMPLE_RATE      = 16000   # Hz
+CHUNK_DURATION   = 1.5     # giay — ngan hon v2, phan hoi nhanh hon
+WHISPER_MODEL    = "base"  # base (145 mb) chinh xac hon tiny và co ho tro tieng viet
+PAIN_THRESHOLD   = 2.0     # nguong tong diem de tính la "keu dau"
+
+# Nguong am luong (RMS). Am thanh binh thuong ~0.02-0.05, tieng keu ~0.15+
+# Chinh giam neu phong im lang, chinh tang neu phong on ao
+ENERGY_THRESHOLD = 0.12
+
+
+#  SCORING SYSTEM: dung co che cong diem thay vì dung tu dien phang
+# Tong diem >= PAIN_THRESHOLD → keu dau.
+# Logic: tieng "oi" mot minh co the la goi ban (diem thap = 0.8),
+# nhung "oi dau qua" → 0.8 + 1.5 = 2.3 → vuot nguong.
+# Acoustic burst (tieng to dot ngot) cong them diem.
+# Tat ca pattern deu lowercase, khong dau (viet thuong + ascii)
+# vi Whisper tiny tieng Viet hay mat dau thanh.
+
+PAIN_PATTERNS: list[tuple[float, str]] = [
+    # BIEU LO DAU MANH (diem cao)
+    (2.5, r"\bđau\s+quá\b"),          # "dau qua"
+    (2.5, r"\bôi\s+trời\b"),          # "oi troi oi"
+    (2.5, r"\btrời\s+ơi\b"),
+    (2.0, r"\bđau\s+quá\s+rồi\b"),
+    (2.0, r"\bouch\b"),
+    (2.0, r"\bargh\b"),
+    (2.0, r"\bai\s+da\b"),            # "ai da"
+    (2.0, r"\bđau\b"),                # "dau" don le
+
+    # TU DON (diem vua)
+    (1.5, r"\bui\s+da\b"),
+    (1.2, r"\bow\b"),
+    (1.2, r"\bugh\b"),
+
+    # TIENG KEU / AM THANH (diem thap, thuong kem acoustic)
+    (0.8, r"\boi\b"),                 # "oi" co the la goi ban → diem thap
+    (0.8, r"\bai\b"),                 # "ai" co the la cau hoi "ai day?"
+    (0.8, r"\bah+\b"),                # "ah", "ahh", "ahhh"
+    (0.8, r"\boh+\b"),
+    (0.6, r"\bum+\b"),
+    (1.0, r"\ba{2,}\b"),              # "aaa", "aaaa" — keo dai
+    (1.0, r"\bo{2,}\b"),              # "ooo"
+    (0.8, r"\bu{2,}\b"),
+]
+
+# Compile truoc de nhanh hon
+_COMPILED: list[tuple[float, re.Pattern]] = [
+    (score, re.compile(pat, re.IGNORECASE))
+    for score, pat in PAIN_PATTERNS
+]
+
+
+def score_text(text: str) -> tuple[float, list[str]]:
+    """
+    Tinh tong diem cua mot doan text.
+    Tra ve (tong_diem, danh_sach_pattern_khop).
+    Moi pattern chi tinh 1 lan dù xuat hien nhieu lan.
+    """
+    total  = 0.0
+    hits   = []
+    for score, pattern in _COMPILED:
+        if pattern.search(text):
+            total += score
+            hits.append(pattern.pattern)
+    return total, hits
+
+class PainDetector:
+    # Ket hop hai tin hieu doc lap:
+    #  1. Text score  : Whisper → text → scoring
+    #  2. Acoustic    : RMS energy cua doan am thanh
+    # Quyet dinh cuoi: is_pain = (text_score >= threshold) OR (text_score >= threshold*0.6 AND acoustic_burst)
+    # acoustic_burst" giup bat duoc tieng "ahhh" ma Whisper nhan dang sai thanh chu nao do vo nghia, nhung am luong ro rang la keu.
+
+    def analyze(
+        self,
+        text: str,
+        audio_rms: float,
+    ) -> tuple[bool, float, str]:
+        #Tra ve (is_pain, score, reason_string)
+        text_score, hits = score_text(text)
+        acoustic_burst   = audio_rms >= ENERGY_THRESHOLD
+
+        # Quyet dinh
+        if text_score >= PAIN_THRESHOLD:
+            is_pain = True
+            reason  = f"score={text_score:.1f} [{', '.join(hits)}]"
+        elif text_score >= PAIN_THRESHOLD * 0.6 and acoustic_burst:
+            # Van ban nua chung + am thanh to → van tinh
+            is_pain = True
+            reason  = f"score={text_score:.1f} + acoustic burst (rms={audio_rms:.3f})"
+        else:
+            is_pain = False
+            parts   = []
+            if text_score > 0:
+                parts.append(f"score={text_score:.1f}")
+            if acoustic_burst:
+                parts.append(f"rms={audio_rms:.3f}")
+            reason = ", ".join(parts) if parts else "—"
+
+        return is_pain, text_score, reason
+
+
+#  MODEL GHI NHAN 
+class PainCryCounter:
+    #Luu tru su kien, tinh thong ke. Chi giu trong RAM.
 
     def __init__(self):
-        self.recognizer    = sr.Recognizer()
-        self.microphone    = sr.Microphone(device_index=DEVICE_INDEX)
-        self.pain_count    = 0
-        self.session_log   = []   # list of (timestamp, transcript)
-        self.running       = False
-        self.session_start = None
+        self.detector    = PainDetector()
+        self.pain_count  = 0
 
-        # Chinh do nhay mic
-        self.recognizer.energy_threshold         = 300
-        self.recognizer.dynamic_energy_threshold = True
-        self.recognizer.pause_threshold          = 0.6
+    def record(self, text: str, audio_rms: float) -> bool:
+        """Tra ve True neu phat hien keu dau, dong thoi cap nhat pain_count."""
+        text = text.strip()
+        if not text:
+            return False
+        is_pain, _, _ = self.detector.analyze(text, audio_rms)
+        if is_pain:
+            self.pain_count += 1
+        return is_pain
 
-        # Ket noi DB
-        self.db_conn = self._connect_db()
 
-    #ket noi db
-    def _connect_db(self):
-        try:
-            conn_str = (
-                f"DRIVER={{{SQL_CONFIG['driver']}}};"
-                f"SERVER={SQL_CONFIG['server']};"
-                f"DATABASE={SQL_CONFIG['database']};"
-                f"UID={SQL_CONFIG['username']};"
-                f"PWD={SQL_CONFIG['password']};"
-                "TrustServerCertificate=yes;"
-            )
-            conn = pyodbc.connect(conn_str, timeout=5)
-            print("[DB] SQL Server connected.")
-            return conn
-        except Exception as e:
-            print(f"[DB] WARNING: Cannot connect to SQL Server: {e}")
-            print("[DB] Program will run normally. Data will NOT be saved.")
-            return None
+#  SPEECH RECOGNIZER 
+class SpeechRecognizer:
 
-    def save_to_db(self):
-        """
-        INSERT 1 ban ghi vao bang sql sau khi phien ket thuc.
-            PainSessionID   INT IDENTITY PRIMARY KEY
-            PatientID       INT
-            SessionDate     DATETIME   -- thoi diem bat dau phien
-            EndTime         DATETIME   -- thoi diem ket thuc phien
-            PainCount       INT        -- so lan keu dau
-        """
-        if self.db_conn is None:
-            print("[DB] No connection, skipping save.")
-            return
+    def __init__(self, model_size: str = WHISPER_MODEL):
+        self.model       = WhisperModel(model_size, device="cpu", compute_type="int8")
+        self.audio_queue : queue.Queue = queue.Queue()
+        self.running     = False
+        print("[*] Tai model xong!")
 
-        end_time = datetime.now()
+    def _audio_callback(self, indata, frames, time, status):
+        if status:
+            print(f"[!] {status}")
+        self.audio_queue.put(indata.copy())
 
-        try:
-            cursor = self.db_conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO PainSession (PatientID, SessionDate, EndTime, PainCount)
-                VALUES (?, ?, ?, ?)
-                """,
-                (PATIENT_ID, self.session_start, end_time, self.pain_count)
-            )
-            self.db_conn.commit()
-            print(f"[DB] Saved: PatientID={PATIENT_ID}, PainCount={self.pain_count}")
-        except Exception as e:
-            print(f"[DB] ERROR saving data: {e}")
-            try:
-                self.db_conn.rollback()
-            except Exception:
-                pass
-        finally:
-            try:
-                self.db_conn.close()
-            except Exception:
-                pass
+    def _transcribe(self, audio_np: np.ndarray) -> tuple[str, float]:
+        """Tra ve (text, rms_energy)."""
+        audio_float = audio_np.flatten().astype(np.float32)
+        rms         = float(np.sqrt(np.mean(audio_float ** 2)))
 
-    #hieu chinh
-    def calibrate(self):
-        print("[MIC] Calibrating ambient noise (2s)...")
-        with self.microphone as source:
-            self.recognizer.adjust_for_ambient_noise(source, duration=2)
-        print(f"[MIC] Energy threshold set to {int(self.recognizer.energy_threshold)}")
+        # Chuan hoa truoc khi dua vao Whisper
+        max_val = np.max(np.abs(audio_float))
+        if max_val > 1e-6:
+            audio_float = audio_float / max_val
 
-   
-    #kiem tra keyword
-    def _contains_pain(self, text: str) -> bool:
-        text = text.lower().strip()
-        for kw in PAIN_KEYWORDS:
-            if kw in text:
-                return True
-        return False
-
-    #nhan dien giong noi
-    def _process(self, audio):
-        try:
-            transcript = self.recognizer.recognize_google(
-                audio, language="vi-VN"
-            )
-            print(f"[HEARD] {transcript}")
-
-            if self._contains_pain(transcript.lower()):
-                self.pain_count += 1
-                ts = datetime.now().strftime("%H:%M:%S")
-                self.session_log.append((ts, transcript))
-                print(f"[PAIN] Detected! Total count: {self.pain_count}  [{ts}]")
-                print(f"       {'='*40}")
-
-        except sr.UnknownValueError:
-            pass
-        except sr.RequestError as e:
-            print(f"[ERROR] Google STT request failed: {e}")
-
-    
-    #background callback
-    def _callback(self, recognizer, audio):
-        if not self.running:
-            return
-        t = threading.Thread(target=self._process, args=(audio,), daemon=True)
-        t.start()
-
-    #start va stop
-    def start(self):
-        self.calibrate()
-        self.running       = True
-        self.session_start = datetime.now()
-        self.pain_count    = 0
-        self.session_log   = []
-
-        self._stop_fn = self.recognizer.listen_in_background(
-            self.microphone,
-            self._callback,
-            phrase_time_limit=4
+        # faster-whisper tra ve generator (segments)
+        segments, _ = self.model.transcribe(
+            audio_float,
+            language="vi",
+            beam_size=1,          # nhanh nhat, du tot voi tiny
+            vad_filter=True,      # bo qua doan im lang tu dong
+            vad_parameters={"min_silence_duration_ms": 300},
         )
-        print("\n[INFO] Listening started. Press ENTER to stop.\n")
+        text = " ".join(seg.text for seg in segments).strip()
+        return text, rms
+
+    def start(self, callback):
+        self.running = True
+
+        def _loop():
+            with sd.InputStream(
+                samplerate = SAMPLE_RATE,
+                channels   = 1,
+                dtype      = "float32",
+                blocksize  = int(SAMPLE_RATE * CHUNK_DURATION),
+                callback   = self._audio_callback,
+            ):
+                print(f"[*] Lang nghe micro... (moi doan {CHUNK_DURATION}s)")
+                while self.running:
+                    try:
+                        chunk        = self.audio_queue.get(timeout=1)
+                        text, rms    = self._transcribe(chunk)
+                        callback(text, rms)
+                    except queue.Empty:
+                        continue
+                    except Exception as ex:
+                        print(f"[!] Loi: {ex}")
+
+        threading.Thread(target=_loop, daemon=True).start()
 
     def stop(self):
         self.running = False
-        if hasattr(self, "_stop_fn"):
-            self._stop_fn(wait_for_stop=False)
-
-    #bao cao lai va save du lieu
-    def report(self):
-        duration = (datetime.now() - self.session_start).total_seconds() if self.session_start else 0
-        print("\n" + "="*50)
-        print("  SESSION REPORT")
-        print("="*50)
-        print(f"  Patient ID   : {PATIENT_ID}")
-        print(f"  Start time   : {self.session_start.strftime('%Y-%m-%d %H:%M:%S') if self.session_start else '-'}")
-        print(f"  Duration     : {int(duration//60):02d}:{int(duration%60):02d}")
-        print(f"  Pain count   : {self.pain_count}")
-        print("-"*50)
-        if self.session_log:
-            print("  Pain events  :")
-            for i, (ts, text) in enumerate(self.session_log, 1):
-                print(f"    {i:>3}. [{ts}] {text}")
-        else:
-            print("  Pain events  : None")
-        print("="*50 + "\n")
-
-        # Gui du lieu len SQL Server
-        print("[DB] Saving session to SQL Server...")
-        self.save_to_db()
 
 
-#main
-if __name__ == "__main__":
-    print("="*50)
-    print("  PAIN KEYWORD COUNTER")
-    print(f"  Keywords : {PAIN_KEYWORDS}")
-    print(f"  Patient  : {PATIENT_ID}")
-    print("="*50)
+#  MAIN 
+def main():
+    print("[*] Dang tai faster-whisper tiny...")
+    counter    = PainCryCounter()
+    recognizer = SpeechRecognizer(WHISPER_MODEL)
 
-    counter = PainCounter()
-    counter.start()
+    def on_audio(text: str, rms: float):
+        if counter.record(text, rms):
+            print(f"KEU DAU: {counter.pain_count}")
+
+    recognizer.start(callback=on_audio)
+    print("[*] Dang lang nghe... (Ctrl+C de thoat)\n")
 
     try:
-        input()   # block cho den khi an enter
+        while True:
+            threading.Event().wait(1)
     except KeyboardInterrupt:
         pass
 
-    counter.stop()
-    counter.report()
+    recognizer.stop()
+    print(f"\nKet qua: {counter.pain_count} lan keu dau.")
+
+
+if __name__ == "__main__":
+    main()
