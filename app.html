@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>PhụcHồi App</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #f5f0e8;
+    color: #1a1a1a;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* CHUNG */
+  .screen { display: none; height: 100vh; }
+  .screen.active { display: flex; }
+
+  .btn-primary {
+    background: #e8a020;
+    color: white;
+    border: none;
+    padding: 14px 32px;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+  }
+  .btn-primary:hover { background: #d4911a; }
+
+  .btn-secondary {
+    background: white;
+    color: #1a1a1a;
+    border: 2px solid #ddd;
+    padding: 12px 32px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+  }
+  .btn-secondary:hover { border-color: #e8a020; color: #e8a020; }
+
+
+  /* MÀNG HÌNH 1: ĐĂNG NHẬP */
+  #login {
+    align-items: center;
+    justify-content: center;
+    background: #f5f0e8;
+  }
+
+  .login-box {
+    background: white;
+    border-radius: 20px;
+    padding: 48px 40px;
+    width: 400px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  }
+
+  .logo {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+
+  .logo-icon {
+    width: 56px;
+    height: 56px;
+    background: #e8a020;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 12px;
+    font-size: 28px;
+  }
+
+  .logo h1 { font-size: 22px; font-weight: 700; color: #1a1a1a; }
+  .logo p { font-size: 13px; color: #888; margin-top: 4px; }
+
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px; }
+
+  .form-group input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 15px;
+    outline: none;
+    transition: border 0.2s;
+  }
+  .form-group input:focus { border-color: #e8a020; }
+
+  .login-box .btn-primary { margin-top: 8px; }
+
+  .login-footer { text-align: center; margin-top: 16px; font-size: 13px; color: #888; }
+
+
+  /* MÀNG HÌNH 2: CHỌN BỘ PHẬN */
+  #chon-bo-phan {
+    flex-direction: column;
+  }
+
+  .topbar {
+    background: white;
+    border-bottom: 1px solid #e8e8e8;
+    padding: 0 32px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .topbar-logo { font-size: 18px; font-weight: 700; color: #e8a020; }
+
+  .topbar-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: #555;
+  }
+
+  .avatar {
+    width: 34px;
+    height: 34px;
+    background: #e8a020;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .chon-content {
+    flex: 1;
+    padding: 40px 48px;
+    overflow-y: auto;
+  }
+
+  .chon-content h2 { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+  .chon-content p { font-size: 14px; color: #666; margin-bottom: 32px; }
+
+  .bp-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 40px;
+  }
+
+  .bp-card {
+    background: white;
+    border: 2px solid #e8e8e8;
+    border-radius: 14px;
+    padding: 24px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .bp-card:hover { border-color: #e8a020; transform: translateY(-2px); }
+  .bp-card.selected { border-color: #e8a020; background: #fff8ee; }
+
+  .bp-icon { font-size: 36px; margin-bottom: 12px; }
+  .bp-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .bp-sub { font-size: 12px; color: #888; }
+
+  .chon-footer {
+    display: flex;
+    gap: 12px;
+    max-width: 400px;
+  }
+
+
+  /* MÀNG HÌNH 3: TẬP */
+  #tap {
+    flex-direction: column;
+  }
+
+  .session-topbar {
+    background: #1a1a1a;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 20px;
+    flex-shrink: 0;
+    color: white;
+  }
+
+  .session-title { font-size: 15px; font-weight: 600; flex: 1; }
+  .session-sub { font-size: 12px; color: #888; margin-top: 2px; }
+
+  .timer-block {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #2a2a2a;
+    padding: 6px 16px;
+    border-radius: 20px;
+  }
+
+  .timer-dot {
+    width: 7px; height: 7px;
+    background: #3ecf74;
+    border-radius: 50%;
+    animation: blink 1.2s infinite;
+  }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .timer-val { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+
+  .session-main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr 320px;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  /* Video hướng dẫn */
+  .video-box {
+    background: #111;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-right: 1px solid #2a2a2a;
+  }
+
+  .video-tag {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.8);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .video-figure {
+    opacity: 0.85;
+  }
+
+  /* Camera */
+  .camera-box {
+    background: #0a0a0a;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-right: 1px solid #2a2a2a;
+  }
+
+  .camera-tag {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(62,207,116,0.3);
+    color: #3ecf74;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .rep-overlay {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    text-align: right;
+  }
+
+  .rep-num {
+    font-size: 72px;
+    font-weight: 700;
+    color: #e8a020;
+    line-height: 1;
+  }
+
+  .rep-of { font-size: 14px; color: #e8a020; opacity: 0.7; margin-top: 4px; }
+
+  .ai-tag {
+    position: absolute;
+    bottom: 20px;
+    left: 16px;
+    background: rgba(62,207,116,0.15);
+    border: 1px solid rgba(62,207,116,0.3);
+    color: #3ecf74;
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ai-dot { width: 6px; height: 6px; background: #3ecf74; border-radius: 50%; animation: blink 0.8s infinite; }
+
+  /* Sidebar phải */
+  .sidebar {
+    background: white;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .sb-section {
+    padding: 20px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .sb-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #bbb;
+    margin-bottom: 14px;
+  }
+
+  .set-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+
+  .set-c {
+    border: 1.5px solid #e8e8e8;
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+  }
+
+  .set-c.active { border-color: #e8a020; background: #fff8ee; }
+  .set-c.done { border-color: #3ecf74; background: #f0fff6; }
+
+  .set-c-num { font-size: 10px; color: #aaa; font-weight: 600; margin-bottom: 4px; }
+  .set-c.active .set-c-num { color: #e8a020; }
+  .set-c.done .set-c-num { color: #3ecf74; }
+
+  .set-c-val { font-size: 20px; font-weight: 700; color: #ccc; }
+  .set-c.active .set-c-val { color: #e8a020; }
+  .set-c.done .set-c-val { color: #3ecf74; }
+
+  .set-c-sub { font-size: 10px; color: #bbb; margin-top: 2px; }
+
+  .stats-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  .stat-item {
+    background: #f8f8f8;
+    border-radius: 10px;
+    padding: 12px;
+  }
+
+  .stat-item-label { font-size: 10px; color: #aaa; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-item-val { font-size: 22px; font-weight: 700; color: #1a1a1a; margin-top: 4px; }
+  .stat-item-sub { font-size: 11px; color: #bbb; margin-top: 2px; }
+
+  .voice-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #f0fff6;
+    border: 1.5px solid #c8f0da;
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+
+  .voice-icon-box {
+    width: 36px; height: 36px;
+    background: #3ecf74;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .voice-text { flex: 1; }
+  .voice-title { font-size: 13px; font-weight: 600; }
+  .voice-hint { font-size: 11px; color: #666; margin-top: 2px; }
+
+  .ai-note-box {
+    background: #fff8ee;
+    border: 1.5px solid #f0d090;
+    border-radius: 10px;
+    padding: 14px;
+  }
+
+  .ai-note-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #e8a020;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ai-note-text { font-size: 13px; color: #555; line-height: 1.6; }
+
+  /* Bottom bar */
+  .session-bottom {
+    background: #1a1a1a;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .btn-stop-sm {
+    background: transparent;
+    border: 1px solid #e24b4a;
+    color: #e24b4a;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-stop-sm:hover { background: rgba(226,75,74,0.1); }
+
+  .btn-pause-sm {
+    background: transparent;
+    border: 1px solid #555;
+    color: #ccc;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .btn-pause-sm:hover { border-color: #888; }
+
+  .session-bottom-mid { flex: 1; display: flex; justify-content: center; }
+
+  .set-dots { display: flex; gap: 8px; align-items: center; }
+  .set-dot { width: 10px; height: 10px; border-radius: 50%; background: #333; }
+  .set-dot.done { background: #3ecf74; }
+  .set-dot.active { background: #e8a020; width: 24px; border-radius: 5px; }
+
+  .btn-next-set {
+    background: #e8a020;
+    color: white;
+    border: none;
+    padding: 10px 22px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-next-set:hover { background: #d4911a; }
+
+
+  /* MÀNG HÌNH 4: KẾT THÚC */
+  #ket-thuc {
+    align-items: center;
+    justify-content: center;
+    background: #f5f0e8;
+  }
+
+  .result-box {
+    background: white;
+    border-radius: 20px;
+    padding: 40px;
+    width: 560px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  }
+
+  .result-header { text-align: center; margin-bottom: 32px; }
+  .result-icon { font-size: 48px; margin-bottom: 12px; }
+  .result-header h2 { font-size: 22px; font-weight: 700; }
+  .result-header p { font-size: 14px; color: #888; margin-top: 4px; }
+
+  .result-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .result-stat {
+    background: #f8f8f8;
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .result-stat-val { font-size: 28px; font-weight: 700; color: #1a1a1a; }
+  .result-stat-label { font-size: 12px; color: #888; margin-top: 4px; }
+
+  .ai-suggest {
+    background: #fff8ee;
+    border: 2px solid #f0d090;
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+
+  .ai-suggest-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #e8a020;
+    margin-bottom: 10px;
+  }
+
+  .ai-suggest-text { font-size: 14px; color: #444; line-height: 1.6; margin-bottom: 16px; }
+
+  .suggest-compare {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+  }
+
+  .suggest-old {
+    background: #f0f0f0;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+  }
+  .suggest-old-label { font-size: 11px; color: #aaa; margin-bottom: 4px; }
+  .suggest-old-val { font-weight: 700; color: #555; }
+
+  .suggest-arrow { font-size: 20px; color: #e8a020; }
+
+  .suggest-new {
+    background: #fff8ee;
+    border: 1.5px solid #e8a020;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+  }
+  .suggest-new-label { font-size: 11px; color: #e8a020; margin-bottom: 4px; }
+  .suggest-new-val { font-weight: 700; color: #e8a020; }
+
+  .result-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+</style>
+</head>
+<body>
+
+<!-- ═══ MÀNG HÌNH 1: ĐĂNG NHẬP ═══ -->
+<div id="login" class="screen active">
+  <div class="login-box">
+    <div class="logo">
+      <div class="logo-icon">🏃</div>
+      <h1>PhụcHồi</h1>
+      <p>Ứng dụng tập phục hồi chức năng</p>
+    </div>
+    <div class="form-group">
+      <label>Chọn bệnh nhân</label>
+      <select id="sel-patient" style="width:100%;padding:12px 14px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:15px;outline:none;background:white;font-family:inherit;">
+        <option value="">-- Đang tải... --</option>
+      </select>
+    </div>
+    <div style="text-align:center;color:#ccc;font-size:12px;margin:4px 0 12px;">— hoặc tạo mới —</div>
+    <div class="form-group">
+      <label>Tên bệnh nhân mới</label>
+      <input type="text" id="inp-new-name" placeholder="Nhập họ tên đầy đủ..."/>
+    </div>
+    <div id="login-err" style="text-align:center;font-size:13px;color:#e24b4a;min-height:18px;margin-bottom:4px;"></div>
+    <button class="btn-primary" onclick="doLogin()">Đăng nhập →</button>
+    <div class="login-footer">Phiên bản 1.0 · Dành cho bệnh nhân</div>
+  </div>
+</div>
+
+
+<!-- ═══ MÀNG HÌNH 2: CHỌN BỘ PHẬN TẬP ═══ -->
+<div id="chon-bo-phan" class="screen">
+  <div class="topbar">
+    <div class="topbar-logo">🏃 PhụcHồi</div>
+    <div class="topbar-user">
+      <div class="avatar" id="avatar-text">BN</div>
+      <span id="topbar-name">Bệnh nhân 01</span>
+    </div>
+  </div>
+  <div class="chon-content">
+    <h2>Chọn bộ phận cần tập</h2>
+    <p>Chọn vùng cơ thể bạn muốn tập phục hồi hôm nay</p>
+
+    <div id="ex-grid" class="bp-grid" style="grid-template-columns: repeat(2,1fr); max-width:600px;">
+      <div class="bp-card selected" onclick="selectBP(this)">
+        <div class="bp-icon">🦵</div>
+        <div class="bp-name">Đầu gối</div>
+        <div class="bp-sub">ACL · Rách dây chằng chéo</div>
+      </div>
+      <div class="bp-card" onclick="selectBP(this)">
+        <div class="bp-icon">💪</div>
+        <div class="bp-name">Khuỷu tay</div>
+        <div class="bp-sub">Tennis Elbow · Viêm cầu lồi</div>
+      </div>
+    </div>
+
+    <div class="chon-footer">
+      <button class="btn-secondary" onclick="goTo('login')" style="width:auto;padding:12px 20px;">← Quay lại</button>
+      <label style="font-size:14px;color:#555;white-space:nowrap;">Số reps:</label>
+      <input type="number" id="inp-rep" value="10" min="1" max="50" style="width:70px;padding:10px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:15px;text-align:center;outline:none;"/>
+      <button class="btn-primary" id="btn-start" onclick="doStartSession()" disabled style="width:auto;padding:14px 24px;">Bắt đầu buổi tập →</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══ MÀNG HÌNH 3: TẬP ═══ -->
+<div id="tap" class="screen">
+  <!-- Top bar -->
+  <div class="session-topbar">
+    <div>
+      <div class="session-title">Nâng chân thẳng — Cơ tứ đầu đùi</div>
+      <div class="session-sub">Đầu gối · Bài 1/4</div>
+    </div>
+    <div class="timer-block">
+      <div class="timer-dot"></div>
+      <div class="timer-val" id="timer">00:00</div>
+    </div>
+  </div>
+
+  <!-- Main area -->
+  <div class="session-main">
+
+    <!-- Video hướng dẫn -->
+    <div class="video-box">
+      <div class="video-tag">▶ Video hướng dẫn</div>
+      <svg class="video-figure" width="280" height="220" viewBox="0 0 280 220" fill="none">
+        <!-- nền sàn -->
+        <rect x="20" y="165" width="240" height="6" rx="3" fill="#2a2200" opacity="0.5"/>
+        <!-- người nằm + nâng chân -->
+        <circle cx="60" cy="120" r="14" fill="#EF9F27" opacity="0.9"/>
+        <line x1="60" y1="134" x2="60" y2="168" stroke="#EF9F27" stroke-width="4" stroke-linecap="round"/>
+        <line x1="60" y1="148" x2="36" y2="168" stroke="#EF9F27" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="60" y1="148" x2="84" y2="168" stroke="#EF9F27" stroke-width="3.5" stroke-linecap="round"/>
+        <!-- chân nằm -->
+        <line x1="60" y1="168" x2="160" y2="168" stroke="#EF9F27" stroke-width="4" stroke-linecap="round"/>
+        <line x1="160" y1="168" x2="200" y2="168" stroke="#EF9F27" stroke-width="4" stroke-linecap="round"/>
+        <!-- chân nâng lên -->
+        <line x1="60" y1="168" x2="155" y2="128" stroke="#BA7517" stroke-width="4" stroke-linecap="round"/>
+        <line x1="155" y1="128" x2="200" y2="124" stroke="#BA7517" stroke-width="4" stroke-linecap="round"/>
+        <!-- góc -->
+        <path d="M 80 165 A 22 22 0 0 0 96 148" stroke="#EF9F27" stroke-width="1.5" stroke-dasharray="3 4" fill="none" opacity="0.6"/>
+        <text x="98" y="155" fill="#EF9F27" font-size="11" font-family="monospace" opacity="0.8">45°</text>
+        <!-- mũi tên -->
+        <path d="M 165 122 L 180 112 L 178 124" fill="#EF9F27" opacity="0.5"/>
+      </svg>
+    </div>
+
+    <!-- Camera -->
+    <div class="camera-box">
+      <div class="camera-tag">● Camera của bạn</div>
+      <!-- MJPEG stream từ camera.py — không có cửa sổ riêng -->
+      <img id="cam-feed"
+           src=""
+           alt="Camera"
+           style="width:100%;height:100%;object-fit:cover;display:block;"
+           onerror="this.style.opacity='0.2'"/>
+      <div class="rep-overlay">
+        <div class="rep-num" id="repNum">8</div>
+        <div class="rep-of">/ 15 reps</div>
+      </div>
+      <div class="ai-tag">
+        <div class="ai-dot"></div>
+        AI đang theo dõi
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+
+      <!-- Set progress -->
+      <div class="sb-section">
+        <div class="sb-label">Tiến độ set</div>
+        <div class="set-cards">
+          <div class="set-c done">
+            <div class="set-c-num">SET 1 ✓</div>
+            <div class="set-c-val">15</div>
+            <div class="set-c-sub">reps</div>
+          </div>
+          <div class="set-c active">
+            <div class="set-c-num">SET 2 ▶</div>
+            <div class="set-c-val" id="liveRep">8</div>
+            <div class="set-c-sub">/ 15</div>
+          </div>
+          <div class="set-c">
+            <div class="set-c-num">SET 3</div>
+            <div class="set-c-val">—</div>
+            <div class="set-c-sub">chờ</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Số liệu -->
+      <div class="sb-section">
+        <div class="sb-label">Số liệu</div>
+        <div class="stats-2col">
+          <div class="stat-item">
+            <div class="stat-item-label">Tổng reps</div>
+            <div class="stat-item-val" id="totalReps">23</div>
+            <div class="stat-item-sub">mục tiêu 45</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-item-label">Tư thế</div>
+            <div class="stat-item-val" style="color:#3ecf74">94%</div>
+            <div class="stat-item-sub">chính xác</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Voice -->
+      <div class="sb-section">
+        <div class="sb-label">Giọng nói</div>
+        <div class="voice-row">
+          <div class="voice-icon-box">🎙️</div>
+          <div class="voice-text">
+            <div class="voice-title">Đang lắng nghe</div>
+            <div class="voice-hint">Nói "đau" để dừng ngay</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI -->
+      <div class="sb-section">
+        <div class="sb-label">Bộ não AI</div>
+        <div class="ai-note-box">
+          <div class="ai-note-title">🤖 Nhận xét</div>
+          <div class="ai-note-text">
+            Tư thế set 1 tốt. Nhịp thở đều.<br>
+            Cường độ hiện tại: <strong>62%</strong><br>
+            Dựa trên buổi trước, AI đề xuất tăng lên 15 reps ở set tới.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="session-bottom">
+    <button class="btn-stop-sm" onclick="doEndSession()">■ Kết thúc</button>
+    <button class="btn-pause-sm" id="btn-pause" onclick="togglePause()">⏸ Tạm dừng</button>
+    <div class="session-bottom-mid">
+      <div class="set-dots">
+        <div class="set-dot done"></div>
+        <div class="set-dot active"></div>
+        <div class="set-dot"></div>
+        <span style="color:#666; font-size:12px; margin-left:6px">Set 2 / 3</span>
+      </div>
+    </div>
+    <button class="btn-next-set" onclick="goTo('ket-thuc')">Hoàn thành Set 2 →</button>
+  </div>
+</div>
+
+
+<!-- ═══ MÀNG HÌNH 4: KẾT THÚC ═══ -->
+<div id="ket-thuc" class="screen">
+  <div class="result-box">
+    <div class="result-header">
+      <div class="result-icon">🎉</div>
+      <h2>Hoàn thành buổi tập!</h2>
+      <p id="resultMeta">—</p>
+    </div>
+
+    <div class="result-stats">
+      <div class="result-stat">
+        <div class="result-stat-val" id="resSets">—</div>
+        <div class="result-stat-label">Tổng sets</div>
+      </div>
+      <div class="result-stat">
+        <div class="result-stat-val" id="resTime">—</div>
+        <div class="result-stat-label">Thời gian</div>
+      </div>
+      <div class="result-stat">
+        <div class="result-stat-val" id="resForm" style="color:#3ecf74">—</div>
+        <div class="result-stat-label">Tư thế đúng</div>
+      </div>
+    </div>
+
+    <div class="ai-suggest">
+      <div class="ai-suggest-title">🤖 AI đề xuất cho buổi tới</div>
+      <div class="ai-suggest-text">
+<span id="aiSuggestText">—</span>
+      </div>
+      <div class="suggest-compare">
+        <div class="suggest-old">
+          <div class="suggest-old-label">Hiện tại</div>
+          <div class="suggest-old-val" id="currentVal">—</div>
+        </div>
+        <div class="suggest-arrow">→</div>
+        <div class="suggest-new">
+          <div class="suggest-new-label">Đề xuất mới</div>
+          <div class="suggest-new-val" id="suggestedVal">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="result-actions">
+      <!-- Bệnh nhân đồng ý → lưu DB | không đồng ý → giữ nguyên -->
+      <button class="btn-secondary" onclick="saveResult(false)">Giữ nguyên</button>
+      <button class="btn-primary" onclick="saveResult(true)">✓ Đồng ý & Lưu lại</button>
+    </div>
+  </div>
+</div>
+
+
+
+<script>
+// app.html — JS layer
+// Toàn bộ giao tiếp với Python qua window.pywebview.api (KHÔNG fetch)
+// Python gọi lại JS qua evaluate_js('updateRepCount(...)') và evaluate_js('showResult(...)')
+// Ngoại lệ duy nhất được phép: <img src="http://127.0.0.1:8765/video"> — MJPEG stream
+
+// STATE
+const S = {
+  patientId:      null,
+  patientName:    '',
+  selectedEx:     null,    // object bài tập đang chọn
+  prescribedRep:  10,
+  timerInt:       null,
+  seconds:        0,
+  paused:         false,
+  mjpegUrl:       'http://127.0.0.1:8765/video',
+};
+
+// UTILS
+function goTo(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function toast(msg, ms = 2500) {
+  // Toast đơn giản — hiện ở góc dưới
+  let el = document.getElementById('_toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = '_toast';
+    el.style.cssText = [
+      'position:fixed','bottom:24px','left:50%','transform:translateX(-50%)',
+      'background:#1a1a1a','color:white','padding:10px 22px','border-radius:10px',
+      'font-size:14px','z-index:9999','opacity:0','transition:opacity .25s',
+      'pointer-events:none'
+    ].join(';');
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.style.opacity = '0', ms);
+}
+
+function api() { return window.pywebview.api; }
+
+// Wrapper: gọi pywebview API và xử lý lỗi đồng nhất
+async function call(method, ...args) {
+  try {
+    const res = await api()[method](...args);
+    if (!res.ok) throw new Error(res.error || 'Lỗi không xác định');
+    return res.data;
+  } catch(e) {
+    toast('⚠ ' + e.message, 4000);
+    throw e;
+  }
+}
+
+// MÀN HÌNH 1: ĐĂNG NHẬP
+// Gọi: window.pywebview.api.get_patients() để load dropdown
+
+// Chờ pywebview sẵn sàng rồi mới load
+window.addEventListener('pywebviewready', async () => {
+  await loadPatients();
+});
+
+async function loadPatients() {
+  const data = await call('get_patients');
+  const sel  = document.getElementById('sel-patient');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">-- Chọn bệnh nhân --</option>';
+  data.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value       = p.patient_id;
+    opt.textContent = p.patient_name;
+    sel.appendChild(opt);
+  });
+}
+
+// Nút đăng nhập → window.pywebview.api.login()
+async function doLogin() {
+  const selEl   = document.getElementById('sel-patient');
+  const newName = document.getElementById('inp-new-name').value.trim();
+  const errEl   = document.getElementById('login-err');
+  if (errEl) errEl.textContent = '';
+
+  const selId   = selEl ? parseInt(selEl.value) : NaN;
+  const selName = selEl ? selEl.selectedOptions[0]?.textContent : '';
+
+  try {
+    let pid, pname, data = {};
+    if (newName) {
+      // Tạo bệnh nhân mới
+      const res = await call('add_patient_and_login', newName);
+      pid   = res.patient_id;
+      pname = res.patient_name;
+      data  = res;   // có sẵn exercises
+    } else if (!isNaN(selId) && selId > 0) {
+      pid   = selId;
+      pname = selName;
+      data  = await call('login', selId, selName);
+    } else {
+      toast('Vui lòng chọn hoặc nhập tên bệnh nhân.');
+      return;
+    }
+
+    S.patientId   = pid;
+    S.patientName = pname;
+
+    // Cập nhật avatar topbar
+    const av = document.getElementById('avatar-text');
+    if (av) av.textContent = pname.trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const tn = document.getElementById('topbar-name');
+    if (tn) tn.textContent = pname;
+
+    // Load bài tập — dùng data từ login() đã có, không gọi API lần 2
+    loadExercises(data.exercises || []);
+    goTo('chon-bo-phan');
+  } catch(e) {
+    // lỗi đã được toast() xử lý
+  }
+}
+
+// MÀN HÌNH 2: CHỌN BÀI TẬP
+// Gọi: window.pywebview.api.login() để lấy danh sách exercises
+
+// exercises được truyền vào từ doLogin() — không gọi API lần 2
+function loadExercises(exercises) {
+  const grid = document.getElementById('ex-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  S.selectedEx = null;
+  const startBtn = document.getElementById('btn-start');
+  if (startBtn) startBtn.disabled = true;
+
+  exercises.forEach(ex => {
+    const icon = ex.khop_tap.includes('gối') ? '🦵' : '💪';
+    const card = document.createElement('div');
+    card.className = 'bp-card';
+    card.dataset.id = ex.id;
+    card.innerHTML = `
+      <div class="bp-icon">${icon}</div>
+      <div class="bp-name">${ex.ten}</div>
+      <div class="bp-sub">${ex.khop_tap} · ${ex.huong_dan.slice(0,40)}...</div>
+    `;
+    card.onclick = () => selectExercise(card, ex);
+    grid.appendChild(card);
+  });
+}
+
+async function selectExercise(card, ex) {
+  document.querySelectorAll('.bp-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+  S.selectedEx = ex;
+  const btn = document.getElementById('btn-start');
+  if (btn) btn.disabled = false;
+
+  // Lấy prescribed_rep từ DB
+  try {
+    const data = await call('get_current_rep', ex.id);
+    const inp  = document.getElementById('inp-rep');
+    if (inp) inp.value = data.current_rep;
+  } catch(e) {}
+}
+
+// Nút "Bắt đầu buổi tập" → window.pywebview.api.start_session()
+async function doStartSession() {
+  if (!S.selectedEx) return;
+  const repEl = document.getElementById('inp-rep');
+  S.prescribedRep = repEl ? (parseInt(repEl.value) || 10) : 10;
+
+  try {
+    // Map tên DB → exercise_key trong camera.py
+    const KEY_MAP = {
+      'gập/duỗi khuỷu tay':    'Gap/duoi khuyu tay',
+      'duỗi tay trên đầu':     'Gap/duoi khuyu tay',
+      'gập cánh tay đứng':     'Gap/duoi khuyu tay',
+      'duỗi khuỷu nhờ trọng lực': 'Gap/duoi khuyu tay',
+      'trượt gối':             'truot goi',
+      'nâng chân thẳng':       'nang chan thang',
+      'ngồi dựa tường':        'squat',
+      'gập gối đứng':          'squat',
+    };
+    const exKey = KEY_MAP[S.selectedEx.ten.toLowerCase()] || S.selectedEx.ten;
+
+    const data = await call('start_session',
+      S.selectedEx.id,
+      S.selectedEx.ten,
+      exKey,               // exercise_key đúng cho camera.py
+      S.prescribedRep,
+      S.selectedEx.khop_tap,
+    );
+
+    // Cập nhật UI màn hình tập
+    const sessTitle = document.querySelector('.session-title');
+    const sessSub   = document.querySelector('.session-sub');
+    if (sessTitle) sessTitle.textContent = S.selectedEx.ten;
+    if (sessSub)   sessSub.textContent   = S.selectedEx.khop_tap + ' · ' + S.patientName;
+
+    const repOf = document.querySelector('.rep-of');
+    if (repOf) repOf.textContent = '/ ' + S.prescribedRep + ' reps';
+
+    // Đặt src camera = MJPEG stream (URL duy nhất được phép)
+    const camImg = document.getElementById('cam-feed');
+    if (camImg) camImg.src = data.mjpeg_url || S.mjpegUrl;
+
+    goTo('tap');
+    _startTimer();
+    toast('📷 Camera đã khởi động');
+  } catch(e) {}
+}
+
+// MÀN HÌNH 3: TẬP
+
+function _startTimer() {
+  S.seconds = 0; S.paused = false;
+  clearInterval(S.timerInt);
+  S.timerInt = setInterval(() => {
+    if (S.paused) return;
+    S.seconds++;
+    const m = String(Math.floor(S.seconds/60)).padStart(2,'0');
+    const s = String(S.seconds%60).padStart(2,'0');
+    const el = document.getElementById('timer');
+    if (el) el.textContent = m + ':' + s;
+  }, 1000);
+}
+
+// Tạm dừng → window.pywebview.api.toggle_pause()
+async function togglePause() {
+  S.paused = !S.paused;
+  const btn = document.getElementById('btn-pause');
+  if (btn) btn.textContent = S.paused ? '▶ Tiếp tục' : '⏸ Tạm dừng';
+  try { await call('toggle_pause'); } catch(e) {}
+}
+
+// updateRepCount — Python gọi qua evaluate_js
+// Python: _window.evaluate_js(f"updateRepCount({rep}, {total}, {pain})")
+function updateRepCount(rep, total, pain = 0) {
+  const repNum = document.getElementById('repNum');
+  const liveRep = document.getElementById('liveRep');
+  const totalReps = document.getElementById('totalReps');
+  if (repNum)   { repNum.textContent = rep;   repNum.style.color='#fff'; setTimeout(()=>repNum.style.color='#e8a020',180); }
+  if (liveRep)  liveRep.textContent  = rep;
+  if (totalReps) totalReps.textContent = total;
+
+  if (pain > 0) {
+    const aiNote = document.querySelector('.ai-note-text');
+    if (aiNote) aiNote.innerHTML = `⚠ Phát hiện <strong>${pain}</strong> lần kêu đau. Đang theo dõi...`;
+  }
+}
+
+// Kết thúc → window.pywebview.api.end_session()
+async function doEndSession() {
+  if (!confirm('Bạn muốn kết thúc buổi tập không?')) return;
+  clearInterval(S.timerInt);
+
+  // Tắt MJPEG bằng cách xóa src
+  const camImg = document.getElementById('cam-feed');
+  if (camImg) camImg.src = '';
+
+  try {
+    // end_session() sẽ tự gọi evaluate_js('showResult(...)') sau khi xong
+    await call('end_session');
+  } catch(e) {}
+}
+
+// MÀN HÌNH 4: KẾT THÚC
+// showResult — Python gọi qua evaluate_js sau khi end_session() xong
+
+function showResult(data) {
+  window._pendingResult = data;
+
+  const now = new Date().toLocaleDateString('vi-VN',
+    {weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'});
+  const metaEl = document.getElementById('resultMeta');
+  if (metaEl) metaEl.textContent = now + ' · ' + (data.exercise_name || S.selectedEx?.ten || '');
+
+  const resSets = document.getElementById('resSets');
+  const resTime = document.getElementById('resTime');
+  const resForm = document.getElementById('resForm');
+  if (resSets) resSets.textContent = (data.reps_completed ?? '—') + '/' + (data.prescribed_rep ?? '—');
+  if (resTime) resTime.textContent = data.duration ?? '—';
+  if (resForm) resForm.textContent = data.composite_score != null ? data.composite_score + ' đ' : '—';
+
+  const dirMap = {
+    increase: '✅ Bạn tập tốt — AI đề xuất tăng nhẹ cường độ.',
+    maintain: '🔄 Cường độ ổn định — tiếp tục duy trì.',
+    reduce:   '⚠️ Phát hiện dấu hiệu mệt/đau — đề xuất giảm cường độ.',
+  };
+  const aiText  = document.getElementById('aiSuggestText');
+  const reasons = (data.reasons || []).join(', ');
+  if (aiText) aiText.textContent =
+    (dirMap[data.direction] || '') +
+    (reasons ? '\nLý do: ' + reasons : '') +
+    (data.pain_count > 0 ? '\nKêu đau: ' + data.pain_count + ' lần' : '');
+
+  const curVal = document.getElementById('currentVal');
+  const sugVal = document.getElementById('suggestedVal');
+  if (curVal) curVal.textContent = (data.current_reps  ?? '—') + ' reps';
+  if (sugVal) sugVal.textContent = (data.suggested_reps ?? '—') + ' reps';
+
+  goTo('ket-thuc');
+}
+
+// Nút đồng ý / từ chối → window.pywebview.api.save_result()
+async function saveResult(agreed) {
+  const data = window._pendingResult;
+  if (!data) { goTo('chon-bo-phan'); return; }
+
+  try {
+    // Gọi Python: save_result(agreed, data) → lưu SQLite + brain state
+    const res = await call('save_result', agreed, data);
+    toast(agreed
+      ? '✓ Đã lưu! Cường độ mới: ' + res.final_reps + ' reps'
+      : '✓ Đã lưu. Giữ nguyên cường độ.', 2500);
+    window._pendingResult = null;
+    setTimeout(() => goTo('chon-bo-phan'), 900);
+  } catch(e) {}
+}
+
+// CHỌN BỘ PHẬN (UI gốc — giữ nguyên)
+function selectBP(el) {
+  document.querySelectorAll('.bp-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,341 @@
+import threading
+import time
+import os
+import sys
+import json
+
+import webview   # pip install pywebview
+
+from db import init_db, get_patients, get_exercises, get_current_rep, \
+               save_session, confirm_session, get_history
+from brain_engine import BrainEngine, SessionInput, CamData, MicData, JointType
+from camera import WorkoutTracker, start_mjpeg_server, MJPEG_PORT
+
+
+# Xác định đường dẫn app.html cạnh exe
+def _asset(name: str) -> str:
+    if getattr(sys, "frozen", False):
+        base = sys._MEIPASS
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, name)
+
+# SESSION STATE
+class _Session:
+    def reset(self):
+        self.patient_id:     int   = 0
+        self.patient_name:   str   = ""
+        self.exercise_id:    int   = 0
+        self.exercise_name:  str   = ""
+        self.prescribed_rep: int   = 10
+        self.joint:          JointType = JointType.KNEE
+        self.start_time:     float = 0.0
+        self.tracker:        WorkoutTracker | None = None
+        self.cam_thread:     threading.Thread | None = None
+        self.pain_counter                = None
+        self.pain_recognizer             = None
+        self.last_rec                    = None   # Recommendation
+        self.session_log_id: int         = 0
+
+    def __init__(self): self.reset()
+
+SESSION = _Session()
+BRAIN   = BrainEngine(state_file=_asset("brain_states.json"))
+
+# API — mỗi method public được JS gọi qua window.pywebview.api
+class Api:
+    """
+    Tất cả method trả về dict có dạng:
+        {"ok": True/False, "data": ..., "error": "..."}
+    JS nhận về và xử lý.
+    """
+
+    # 1. Lấy danh sách bệnh nhân khi load trang
+    def get_patients(self) -> dict:
+        try:
+            return {"ok": True, "data": get_patients()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # 1b. Tạo bệnh nhân mới + đăng nhập (JS gọi khi nhập tên mới)
+    def add_patient_and_login(self, patient_name: str) -> dict:
+        try:
+            from db import add_patient
+            new_id = add_patient(str(patient_name))
+            SESSION.reset()
+            SESSION.patient_id   = new_id
+            SESSION.patient_name = str(patient_name)
+            exercises = get_exercises()
+            return {"ok": True, "data": {
+                "patient_id":   new_id,
+                "patient_name": str(patient_name),
+                "exercises":    exercises,
+            }}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # 2. Đăng nhập
+    def login(self, patient_id: int, patient_name: str) -> dict:
+        try:
+            SESSION.reset()
+            SESSION.patient_id   = int(patient_id)
+            SESSION.patient_name = str(patient_name)
+            exercises = get_exercises()
+            return {"ok": True, "data": {"exercises": exercises}}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # 3. Lấy cường độ hiện tại khi chọn bài tập
+    def get_current_rep(self, exercise_id: int) -> dict:
+        try:
+            rep = get_current_rep(SESSION.patient_id, int(exercise_id))
+            return {"ok": True, "data": {"current_rep": rep}}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # 4. Bắt đầu buổi tập
+    def start_session(self, exercise_id: int, exercise_name: str,
+                      exercise_key: str, prescribed_rep: int,
+                      khop_tap: str) -> dict:
+        """
+        Khởi động camera (MJPEG stream) + mic.
+        Sau mỗi rep, gọi evaluate_js('updateRepCount(...)') về UI.
+        """
+        try:
+            SESSION.exercise_id    = int(exercise_id)
+            SESSION.exercise_name  = str(exercise_name)
+            SESSION.prescribed_rep = int(prescribed_rep)
+            SESSION.start_time     = time.time()
+            khop = khop_tap.lower()
+            SESSION.joint = JointType.ELBOW if "khuỷu" in khop or "khuyu" in khop \
+                            else JointType.KNEE
+
+            # Khởi động WorkoutTracker
+            tracker = WorkoutTracker(exercise_key=exercise_key)
+            SESSION.tracker = tracker
+
+            # Callback: mỗi rep → evaluate_js về UI
+            def on_rep(rep_cur: int, total: int):
+                pain = SESSION.pain_counter.pain_count \
+                       if SESSION.pain_counter else 0
+                js = (f"updateRepCount("
+                      f"{rep_cur}, {total}, {pain})")
+                try:
+                    _window.evaluate_js(js)
+                except Exception:
+                    pass
+
+            tracker.on_rep = on_rep
+
+            # Chạy camera trong thread riêng
+            def cam_loop():
+                tracker.run()
+
+            SESSION.cam_thread = threading.Thread(target=cam_loop, daemon=True)
+            SESSION.cam_thread.start()
+
+            # Khởi động mic
+            self._start_mic()
+
+            return {
+                "ok": True,
+                "data": {
+                    "mjpeg_url":    f"http://127.0.0.1:{MJPEG_PORT}/video",
+                    "prescribed_rep": prescribed_rep,
+                }
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _start_mic(self):
+        def _loop():
+            try:
+                from pain_counter import PainCryCounter, SpeechRecognizer
+                SESSION.pain_counter    = PainCryCounter()
+                SESSION.pain_recognizer = SpeechRecognizer()
+                SESSION.pain_recognizer.start(
+                    callback=lambda t, r: SESSION.pain_counter.record(t, r)
+                )
+            except Exception as ex:
+                print(f"[MIC] Lỗi: {ex}")
+        threading.Thread(target=_loop, daemon=True).start()
+
+    # 5. Tạm dừng / tiếp tục
+    def toggle_pause(self) -> dict:
+        try:
+            if SESSION.tracker:
+                SESSION.tracker.toggle_pause()
+                return {"ok": True, "data": {"paused": SESSION.tracker.paused}}
+            return {"ok": False, "error": "Chưa có buổi tập"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # 6. Kết thúc buổi tập
+    def end_session(self) -> dict:
+        """
+        Dừng camera + mic → gọi BrainEngine → gọi evaluate_js('showResult(...)')
+        """
+        try:
+            # Dừng camera
+            cam_data = {"reps_completed": 0, "speed_score": 50.0, "rom_score": 50.0}
+            if SESSION.tracker:
+                SESSION.tracker.stop()
+                if SESSION.cam_thread:
+                    SESSION.cam_thread.join(timeout=3.0)
+                cam_data = SESSION.tracker.get_cam_data()
+
+            # Dừng mic
+            pain_count = 0
+            if SESSION.pain_recognizer:
+                SESSION.pain_recognizer.stop()
+                time.sleep(0.3)
+            if SESSION.pain_counter:
+                pain_count = SESSION.pain_counter.pain_count
+
+            elapsed = int(time.time() - SESSION.start_time)
+            duration = f"{elapsed//60:02d}:{elapsed%60:02d}"
+            form_score = round((cam_data["speed_score"] + cam_data["rom_score"]) / 2, 1)
+
+            # Tính week_number
+            hist = get_history(SESSION.patient_id, limit=100)
+            week_number = max(1, (len(hist) // 3) + 1)
+
+            # Gọi Brain Engine
+            rec = BRAIN.analyze(SessionInput(
+                patient_id   = str(SESSION.patient_id),
+                exercise_id  = str(SESSION.exercise_id),
+                joint        = SESSION.joint,
+                reps_target  = SESSION.prescribed_rep,
+                cam          = CamData(
+                    reps_completed = cam_data["reps_completed"],
+                    speed_score    = cam_data["speed_score"],
+                    rom_score      = cam_data["rom_score"],
+                    form_score     = form_score,
+                ),
+                mic          = MicData(pain_events=pain_count),
+                week_number  = week_number,
+            ))
+            SESSION.last_rec = rec
+
+            result = {
+                "reps_completed":   cam_data["reps_completed"],
+                "prescribed_rep":   SESSION.prescribed_rep,
+                "pain_count":       pain_count,
+                "duration":         duration,
+                "form_score":       form_score,
+                "direction":        rec.direction.value,
+                "current_reps":     rec.current_reps,
+                "suggested_reps":   rec.suggested_reps,
+                "composite_score":  rec.composite_score,
+                "reasons":          rec.reasons,
+                "stability_note":   rec.stability_note,
+                "is_safety_override": rec.is_safety_override,
+                "patient_id":       SESSION.patient_id,
+                "exercise_id":      SESSION.exercise_id,
+                "exercise_name":    SESSION.exercise_name,
+            }
+
+            # Gọi showResult() trong app.html
+            js = f"showResult({json.dumps(result, ensure_ascii=False)})"
+            try:
+                _window.evaluate_js(js)
+            except Exception:
+                pass
+
+            return {"ok": True, "data": result}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # 7. Lưu kết quả (đồng ý / từ chối đề xuất)
+    def save_result(self, agreed: bool, data: dict) -> dict:
+        """
+        JS gọi: window.pywebview.api.save_result(true/false, pendingResult)
+        Lưu SQLite + cập nhật Brain Engine state.
+        """
+        try:
+            rec        = SESSION.last_rec
+            agreed     = bool(agreed)
+            final_reps = data.get("suggested_reps", 10) if agreed \
+                         else data.get("current_reps", 10)
+
+            if not agreed:
+                action, note = "giu_nguyen", "Bệnh nhân từ chối đề xuất."
+            elif final_reps > data.get("current_reps", 10):
+                action, note = "tang", f"Tăng → {final_reps} reps"
+            elif final_reps < data.get("current_reps", 10):
+                action, note = "giam", f"Giảm → {final_reps} reps"
+            else:
+                action, note = "giu_nguyen", "Giữ nguyên."
+
+            reasons_str = "; ".join(rec.reasons) if rec else ""
+            full_note   = note + (" | " + reasons_str if reasons_str else "")
+
+            # Lưu session_log + exercise_adjustment
+            sid = save_session(
+                patient_id        = data["patient_id"],
+                exercise_id       = data["exercise_id"],
+                prescribed_rep    = SESSION.prescribed_rep,
+                actual_rep        = data.get("reps_completed", 0),
+                pain_count        = data.get("pain_count", 0),
+                suggested_rep     = final_reps,
+                adjustment_action = action,
+                adjustment_note   = full_note,
+            )
+            SESSION.session_log_id = sid
+
+            # Nếu đồng ý → cập nhật current_config
+            if agreed:
+                confirm_session(sid, data["patient_id"], data["exercise_id"], final_reps)
+                BRAIN.confirm_recommendation(
+                    str(data["patient_id"]), str(data["exercise_id"]), final_reps
+                )
+            else:
+                BRAIN.reject_recommendation(
+                    str(data["patient_id"]), str(data["exercise_id"])
+                )
+
+            SESSION.last_rec = None
+            return {"ok": True, "data": {"action": action, "final_reps": final_reps}}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # 8. Lịch sử buổi tập
+    def get_history(self, limit: int = 10) -> dict:
+        try:
+            return {"ok": True, "data": get_history(SESSION.patient_id, limit)}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+# ENTRY POINT
+_window: webview.Window = None
+
+def main():
+    global _window
+
+    # Khởi tạo DB
+    init_db()
+
+    # Khởi động MJPEG server ngầm
+    start_mjpeg_server(MJPEG_PORT)
+
+    # Tạo API instance
+    api = Api()
+
+    # Tạo cửa sổ PyWebView duy nhất
+    _window = webview.create_window(
+        title       = "PhụcHồi",
+        url         = _asset("app.html"),
+        js_api      = api,
+        width       = 1280,
+        height      = 800,
+        min_size    = (1024, 600),
+        resizable   = True,
+    )
+
+    # Chạy — blocking cho đến khi đóng cửa sổ
+    webview.start(debug=False)
+
+
+if __name__ == "__main__":
+    main()
