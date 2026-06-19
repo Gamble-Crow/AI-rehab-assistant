@@ -101,10 +101,11 @@ class StabilityState:
         (OSCILLATION_WINDOW buổi gần nhất) — nếu giá trị đề xuất đã
         từng xuất hiện rồi bị giảm xuống thì giữ nguyên, tránh 7→8→7→8.
     """
-    current_reps:       int
+    # current_reps DA BO: nguon duy nhat ve "reps hien tai" la DB (current_config).
+    # Brain chi giu trang thai chong dao dong (pending + lich su reps DA TAP).
     pending_dir:        Optional[Direction] = None
     pending_count:      int = 0
-    reps_history:       list = field(default_factory=list)  # Lịch sử reps theo buổi
+    reps_history:       list = field(default_factory=list)  # Lịch sử reps ĐÃ TẬP theo buổi
     CONFIRM_THRESHOLD:  int = 1         # Cần N buổi liên tiếp để xác nhận thay đổi
 
 
@@ -254,18 +255,17 @@ class OscillationDetector:
     OSCILLATION_WINDOW = 4: kiểm tra 4 buổi gần nhất.
       - Đủ rộng để bắt 7→8→7 và 7→8→7→7.
       - Không quá bảo thủ như window 6+, tránh cản trở tiến bộ thật sự.
+
+      Trả về (oscillating: bool, note: str).
+
+        Điều kiện chặn: trong OSCILLATION_WINDOW buổi gần nhất,
+        tìm thấy ít nhất 1 lần giá trị == proposed_reps
+        và buổi ngay sau đó có reps thấp hơn (tức đã bị giảm xuống).
     """
 
     OSCILLATION_WINDOW = 4
 
     def is_oscillating(self, reps_history: list, proposed_reps: int) -> tuple[bool, str]:
-        """
-        Trả về (oscillating: bool, note: str).
-
-        Điều kiện chặn: trong OSCILLATION_WINDOW buổi gần nhất,
-        tìm thấy ít nhất 1 lần giá trị == proposed_reps
-        và buổi ngay sau đó có reps thấp hơn (tức đã bị giảm xuống).
-        """
         recent = reps_history[-self.OSCILLATION_WINDOW:]
         if len(recent) < 2:
             return False, ""
@@ -392,8 +392,11 @@ class BrainEngine:
 
         # Lấy hoặc khởi tạo stability state
         if key not in self._states:
-            self._states[key] = StabilityState(current_reps=inp.reps_target)
+            self._states[key] = StabilityState()
         state = self._states[key]
+
+        # NGUON DUY NHAT cho "reps hien tai" = reps_target (DB/UI), khong luu trong brain
+        base_reps = inp.reps_target
 
         # Bước 1: Tính điểm
         score, factors, reasons = self._scorer.compute(inp)
@@ -407,7 +410,7 @@ class BrainEngine:
 
         # Bước 2.5: Tính trước proposed_reps để truyền cho StabilityFilter
         # (cần biết mức đề xuất để kiểm tra oscillation)
-        proposed_reps = self._adjuster.adjust(state.current_reps, raw_dir)
+        proposed_reps = self._adjuster.adjust(base_reps, raw_dir)
 
         # Bước 3: Lọc qua stability filter
         # Đau nhiều (>=6) → bypass filter, giảm ngay để đảm bảo an toàn
@@ -421,14 +424,10 @@ class BrainEngine:
                 state, raw_dir, proposed_reps
             )
 
-        # Bước 3.5: Ghi nhận reps hiện tại vào lịch sử (trước khi áp dụng thay đổi)
-        # Lịch sử phản ánh những gì bệnh nhân thực sự tập ở buổi này
-        state.reps_history.append(state.current_reps)
-
-        # Bước 4: Tính số reps mới — chỉ là gợi ý, chưa áp dụng
-        # KHÔNG tự cập nhật state ở đây.
-        # Bệnh nhân phải gọi confirm_recommendation() để áp dụng thay đổi.
-        new_reps = proposed_reps if final_dir != Direction.MAINTAIN else state.current_reps
+        # Bước 4: Tính số reps mới — chỉ là gợi ý, chưa áp dụng.
+        # reps_history KHÔNG ghi ở đây — chỉ ghi khi buổi tập được LƯU
+        # (confirm/reject), để buổi chưa lưu không lọt vào kiểm tra dao động.
+        new_reps = proposed_reps if final_dir != Direction.MAINTAIN else base_reps
 
         if self._state_file:
             self._save_states()
@@ -436,7 +435,7 @@ class BrainEngine:
         return Recommendation(
             direction         = final_dir,
             suggested_reps    = new_reps,
-            current_reps      = state.current_reps,
+            current_reps      = base_reps,
             composite_score   = round(score, 1),
             factor_scores     = {k: round(v, 1) for k, v in factors.items()},
             reasons           = reasons,
@@ -448,30 +447,30 @@ class BrainEngine:
     def get_state(self, patient_id: str, exercise_id: str) -> Optional[StabilityState]:
         return self._states.get(f"{patient_id}::{exercise_id}")
 
-    def confirm_recommendation(self, patient_id: str, exercise_id: str, suggested_reps: int):
-        """
-        Bệnh nhân đồng ý với gợi ý → cập nhật state, lưu xuống DB/file.
-        Gọi hàm này từ UI khi bệnh nhân bấm 'Đồng ý'.
-        """
+    def _finalize(self, patient_id: str, exercise_id: str, trained_reps: int):
+        """Ghi nhận buổi tập đã LƯU: thêm reps đã tập vào lịch sử + reset pending."""
         key = f"{patient_id}::{exercise_id}"
-        if key in self._states:
-            self._states[key].current_reps = suggested_reps
-            self._states[key].pending_dir = None
-            self._states[key].pending_count = 0
+        if key not in self._states:
+            self._states[key] = StabilityState()
+        st = self._states[key]
+        st.reps_history.append(int(trained_reps))
+        st.reps_history = st.reps_history[-10:]   # giữ tối đa 10 buổi gần nhất
+        st.pending_dir = None
+        st.pending_count = 0
         if self._state_file:
             self._save_states()
 
-    def reject_recommendation(self, patient_id: str, exercise_id: str):
+    def confirm_recommendation(self, patient_id: str, exercise_id: str, trained_reps: int):
         """
-        Bệnh nhân không đồng ý → giữ nguyên state, reset pending.
-        Gọi hàm này từ UI khi bệnh nhân bấm 'Không thay đổi'.
+        Bệnh nhân đồng ý → ghi nhận buổi đã lưu.
+        (current_config trong DB do db.py cập nhật; brain KHÔNG giữ current_reps nữa.)
+        trained_reps = số reps bệnh nhân ĐÃ TẬP buổi này (= prescribed_rep).
         """
-        key = f"{patient_id}::{exercise_id}"
-        if key in self._states:
-            self._states[key].pending_dir = None
-            self._states[key].pending_count = 0
-        if self._state_file:
-            self._save_states()
+        self._finalize(patient_id, exercise_id, trained_reps)
+
+    def reject_recommendation(self, patient_id: str, exercise_id: str, trained_reps: int):
+        """Bệnh nhân từ chối → vẫn ghi nhận buổi đã tập + reset pending."""
+        self._finalize(patient_id, exercise_id, trained_reps)
 
     def reset_state(self, patient_id: str, exercise_id: str):
         """Reset state khi bắt đầu bài tập mới hoặc thay đổi giai đoạn."""
@@ -486,7 +485,6 @@ class BrainEngine:
     def _save_states(self):
         data = {
             k: {
-                "current_reps":  s.current_reps,
                 "pending_dir":   s.pending_dir.value if s.pending_dir else None,
                 "pending_count": s.pending_count,
                 "reps_history":  s.reps_history,
@@ -501,8 +499,7 @@ class BrainEngine:
             data = json.load(f)
         for k, v in data.items():
             self._states[k] = StabilityState(
-                current_reps  = v["current_reps"],
-                pending_dir   = Direction(v["pending_dir"]) if v["pending_dir"] else None,
-                pending_count = v["pending_count"],
+                pending_dir   = Direction(v["pending_dir"]) if v.get("pending_dir") else None,
+                pending_count = v.get("pending_count", 0),
                 reps_history  = v.get("reps_history", []),
             )

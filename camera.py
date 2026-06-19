@@ -12,19 +12,24 @@ import cv2
 import mediapipe as mp
 import numpy as np
 from mediapipe.tasks import python as mp_python
-from mediapipe.tasks.python import vision as mp_vision
 from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
 from ultralytics import YOLO
 import time
 import urllib.request
+from urllib.parse import urlparse, parse_qs, unquote
+import mimetypes
 import os
 import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 
 MJPEG_PORT   = 8765
 CAMERA_INDEX = 0
 FRAME_WIDTH  = 1280
 FRAME_HEIGHT = 720
+
+# Tang sang phong toi bang gamma (chinh tay): <1 = sang hon, lift vung toi manh
+CAM_GAMMA  = 0.55
+_GAMMA_LUT = np.array([((i / 255.0) ** CAM_GAMMA) * 255 for i in range(256)], dtype=np.uint8)
 
 DISPLAY_CONFIG = {
     "show_exercise_name": True,
@@ -67,8 +72,8 @@ EXERCISES = {
         "ideal_rep_seconds": (2.5, 5.0),
     },
     "nang chan thang": {
-        "name": "Nang chan thang", "joints": (23,25,27),
-        "down_angle": 0,   "up_angle": 35,
+        "name": "Nang chan thang", "joints": (11,23,25),
+        "down_angle": 145,   "up_angle": 165,
         "ideal_rep_seconds": (3.0, 6.0),
     },
 }
@@ -85,6 +90,32 @@ C = {
     "red":(0,60,220),"bg":(30,30,30),"accent":(0,180,255),
     "skeleton":(50,200,50),"joint":(0,140,255),
 }
+
+# ── Cache model: nap 1 lan, dung lai moi buoi ──
+_YOLO_MODEL = None
+_LANDMARKER = None
+
+def _get_yolo():
+    global _YOLO_MODEL
+    if _YOLO_MODEL is None:
+        print("[INFO] Loading YOLO (once)...")
+        _YOLO_MODEL = YOLO("yolov8n.pt")
+    return _YOLO_MODEL
+
+def _get_landmarker():
+    global _LANDMARKER
+    if _LANDMARKER is None:
+        print("[INFO] Loading MediaPipe Pose (once)...")
+        opts = PoseLandmarkerOptions(
+            base_options=mp_python.BaseOptions(model_asset_path=ensure_model()),
+            running_mode=RunningMode.VIDEO,
+            num_poses=1,
+            min_pose_detection_confidence=0.6,
+            min_pose_presence_confidence=0.6,
+            min_tracking_confidence=0.6,
+        )
+        _LANDMARKER = PoseLandmarker.create_from_options(opts)
+    return _LANDMARKER
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -105,6 +136,8 @@ class _MJPEGHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args): pass
 
     def do_GET(self):
+        if self.path.startswith("/clip"):
+            self._serve_clip(); return
         if self.path != "/video":
             self.send_response(404); self.end_headers(); return
         self.send_response(200)
@@ -125,11 +158,54 @@ class _MJPEGHandler(BaseHTTPRequestHandler):
                     self.wfile.write(b"\r\n")
                     self.wfile.flush()
                 time.sleep(0.033)
-        except (BrokenPipeError, ConnectionResetError):
+        except (ConnectionError, OSError):
+            pass
+
+    def _serve_clip(self):
+        # Phuc vu file video trong thu muc video/, ho tro Range (206) cho <video>
+        rel  = unquote((parse_qs(urlparse(self.path).query).get("f") or [""])[0]).replace("\\", "/")
+        base = os.path.dirname(os.path.abspath(__file__))
+        path = os.path.normpath(os.path.join(base, rel))
+        vdir = os.path.join(base, "video")
+        if not path.startswith(vdir) or not os.path.isfile(path):
+            self.send_response(404); self.end_headers(); return
+        try:
+            data = open(path, "rb").read()
+        except OSError:
+            self.send_response(404); self.end_headers(); return
+
+        total = len(data)
+        ctype = mimetypes.guess_type(path)[0] or "video/mp4"
+        rng   = self.headers.get("Range")
+        if rng and rng.startswith("bytes="):
+            try:
+                s, e = rng[6:].split("-")
+                start = int(s) if s else 0
+                end   = int(e) if e else total - 1
+            except ValueError:
+                start, end = 0, total - 1
+            start = max(0, start); end = min(end, total - 1)
+            body  = data[start:end + 1]
+            self.send_response(206)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Range", f"bytes {start}-{end}/{total}")
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Length", str(len(body)))
+        else:
+            body = data
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Length", str(total))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except (ConnectionError, OSError):
             pass
 
 def start_mjpeg_server(port: int = MJPEG_PORT):
-    server = HTTPServer(("127.0.0.1", port), _MJPEGHandler)
+    server = ThreadingHTTPServer(("127.0.0.1", port), _MJPEGHandler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     print(f"[CAM] MJPEG: http://127.0.0.1:{port}/video")
     return server
@@ -176,52 +252,42 @@ def ensure_model(path="pose_landmarker_full.task"):
 
 class WorkoutTracker:
 
-    def __init__(self, exercise_key: str = DEFAULT_EXERCISE):
-        print("[INFO] Loading YOLO...")
-        self.yolo = YOLO("yolov8n.pt")
+    def __init__(self, config: dict):
+        # config lay tu DB qua start_session:
+        #   {"name","joints":(a,b,c),"down_angle","up_angle","ideal_rep_seconds":(lo,hi)}
+        self.yolo       = _get_yolo()
+        self.landmarker = _get_landmarker()
 
-        print("[INFO] Loading MediaPipe Pose...")
-        model_path = ensure_model()
-        opts = PoseLandmarkerOptions(
-            base_options=mp_python.BaseOptions(model_asset_path=model_path),
-            running_mode=RunningMode.VIDEO,
-            num_poses=1,
-            min_pose_detection_confidence=0.6,
-            min_pose_presence_confidence=0.6,
-            min_tracking_confidence=0.6,
-        )
-        self.landmarker = PoseLandmarker.create_from_options(opts)
+        self._cfg = config
+        self._k   = "cur"               # 1 bai / buoi -> 1 key duy nhat
+        keys      = [self._k]
 
-        self.ex_keys = list(EXERCISES.keys())
-        start_key    = exercise_key if exercise_key in EXERCISES else DEFAULT_EXERCISE
-        self.cur_idx = self.ex_keys.index(start_key)
-
-        self.reps   = {k: 0    for k in EXERCISES}
-        self.stages = {k: None for k in EXERCISES}
+        self.reps   = {k: 0    for k in keys}
+        self.stages = {k: None for k in keys}
         self.angle  = 0.0
 
         self.t0=time.time(); self.paused=False
         self.pause_acc=0.0;  self.pause_start=0.0
         self.fps=0;          self.ftimes=[]
 
-        self._rep_start_time   = {k: None  for k in EXERCISES}
-        self._min_angle_in_rep = {k: 180.0 for k in EXERCISES}
-        self._rep_speeds       = {k: []    for k in EXERCISES}
-        self._rep_roms         = {k: []    for k in EXERCISES}
+        self._rep_start_time   = {k: None  for k in keys}
+        self._min_angle_in_rep = {k: 180.0 for k in keys}
+        self._rep_speeds       = {k: []    for k in keys}
+        self._rep_roms         = {k: []    for k in keys}
 
-        self.STABLE_FRAMES_REQUIRED = 20
-        self._stable_frames = {k: 0     for k in EXERCISES}
-        self._ready         = {k: False for k in EXERCISES}
+        self.STABLE_FRAMES_REQUIRED = 10
+        self._stable_frames = {k: 0     for k in keys}
+        self._ready         = {k: False for k in keys}
 
         self._stop  = False
-        self.on_rep = None   # callback(rep_current, total_all)
+        self.on_rep = None   # callback(rep_current, total)
 
-        print("[INFO] Ready!")
+        print("[INFO] Tracker ready:", config.get("name"))
 
     @property
-    def ck(self): return self.ex_keys[self.cur_idx]
+    def ck(self): return self._k
     @property
-    def ce(self): return EXERCISES[self.ck]
+    def ce(self): return self._cfg
 
     def stop(self):          self._stop = True
     def toggle_pause(self):
@@ -237,11 +303,6 @@ class WorkoutTracker:
         self._rep_start_time[k]=None; self._min_angle_in_rep[k]=180.0
         self._rep_speeds[k].clear(); self._rep_roms[k].clear()
         self._stable_frames[k]=0; self._ready[k]=False
-
-    def switch_exercise(self, key: str):
-        if key in EXERCISES:
-            self.cur_idx=self.ex_keys.index(key)
-            k=key; self._stable_frames[k]=0; self._ready[k]=False; self.stages[k]=None
 
     def update_fps(self):
         now=time.time(); self.ftimes.append(now)
@@ -375,10 +436,18 @@ class WorkoutTracker:
         KHÔNG có cv2.imshow(), KHÔNG có cv2.waitKey().
         Frame được đẩy sang MJPEG server qua _set_frame().
         """
+        # Xoa frame cu cua buoi truoc -> hien placeholder "dang khoi dong"
+        _ph = np.zeros((FRAME_HEIGHT, FRAME_WIDTH, 3), np.uint8)
+        txt(_ph, "Dang khoi dong camera...", (60, FRAME_HEIGHT // 2), 1.0, C["white"], 2)
+        _set_frame(_ph)
+
         cap=cv2.VideoCapture(CAMERA_INDEX)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH,  FRAME_WIDTH)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
         if not cap.isOpened():
+            _err = np.zeros((FRAME_HEIGHT, FRAME_WIDTH, 3), np.uint8)
+            txt(_err, "KHONG MO DUOC CAMERA", (60, FRAME_HEIGHT // 2), 1.0, C["red"], 2)
+            _set_frame(_err)
             print("[ERR] Cannot open camera."); return
 
         print("[CAM] Loop started (streaming via MJPEG)...")
@@ -389,6 +458,7 @@ class WorkoutTracker:
             if not ret: time.sleep(0.05); continue
 
             frame=cv2.flip(frame,1)
+            frame=cv2.LUT(frame, _GAMMA_LUT)
             self.update_fps()
 
             if self.paused:
@@ -410,7 +480,12 @@ class WorkoutTracker:
                 cv2.rectangle(frame,(x1,y1),(x2,y2),C["accent"],2)
 
             # MediaPipe
-            lms,wc,hc,off=self.detect_pose(frame,timestamp_ms,best_box)
+            try:
+                lms,wc,hc,off=self.detect_pose(frame,timestamp_ms,best_box)
+            except RuntimeError as e:
+                if "shutdown" in str(e):   # app dang dong -> MediaPipe da tat worker, thoat em
+                    break
+                raise
             new_rep=False
 
             if lms:

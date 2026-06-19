@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# PyInstaller
+build/
+dist/
+*.manifest
+
+# Model AI (tu dong tai khi chay -> khong can day len)
+*.pt
+*.task
+*.tflite
+
+# Du lieu sinh ra khi chay
+brain_states.json
+_test_brain.json
+*.db-wal
+*.db-shm
+
+# Sao luu tam
+*_backup/
+video_backup/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

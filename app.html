@@ -225,6 +225,10 @@
     overflow: hidden;
   }
 
+  /* Thu ô video mẫu -> camera chiếm chỗ trống để theo dõi động tác */
+  .session-main.video-collapsed { grid-template-columns: 1fr 320px; }
+  .session-main.video-collapsed .video-box { display: none; }
+
   /* Video hướng dẫn */
   .video-box {
     background: #111;
@@ -237,6 +241,7 @@
 
   .video-tag {
     position: absolute;
+    z-index: 2;
     top: 16px;
     left: 16px;
     background: rgba(0,0,0,0.6);
@@ -451,7 +456,6 @@
 
   .session-bottom-mid { flex: 1; display: flex; justify-content: center; }
 
-  .set-dots { display: flex; gap: 8px; align-items: center; }
   .set-dot { width: 10px; height: 10px; border-radius: 50%; background: #333; }
   .set-dot.done { background: #3ecf74; }
   .set-dot.active { background: #e8a020; width: 24px; border-radius: 5px; }
@@ -600,16 +604,7 @@
     <p>Chọn vùng cơ thể bạn muốn tập phục hồi hôm nay</p>
 
     <div id="ex-grid" class="bp-grid" style="grid-template-columns: repeat(2,1fr); max-width:600px;">
-      <div class="bp-card selected" onclick="selectBP(this)">
-        <div class="bp-icon">🦵</div>
-        <div class="bp-name">Đầu gối</div>
-        <div class="bp-sub">ACL · Rách dây chằng chéo</div>
-      </div>
-      <div class="bp-card" onclick="selectBP(this)">
-        <div class="bp-icon">💪</div>
-        <div class="bp-name">Khuỷu tay</div>
-        <div class="bp-sub">Tennis Elbow · Viêm cầu lồi</div>
-      </div>
+      <!-- Danh sách bài tập được nạp từ DB qua loadExercises() -->
     </div>
 
     <div class="chon-footer">
@@ -628,7 +623,6 @@
   <div class="session-topbar">
     <div>
       <div class="session-title">Nâng chân thẳng — Cơ tứ đầu đùi</div>
-      <div class="session-sub">Đầu gối · Bài 1/4</div>
     </div>
     <div class="timer-block">
       <div class="timer-dot"></div>
@@ -636,32 +630,21 @@
     </div>
   </div>
 
-  <!-- Main area -->
-  <div class="session-main">
+  <!-- Main area — camera rộng mặc định; bấm "Hiện video mẫu" để xem clip -->
+  <div class="session-main video-collapsed">
 
     <!-- Video hướng dẫn -->
     <div class="video-box">
       <div class="video-tag">▶ Video hướng dẫn</div>
-      <svg class="video-figure" width="280" height="220" viewBox="0 0 280 220" fill="none">
-        <!-- nền sàn -->
-        <rect x="20" y="165" width="240" height="6" rx="3" fill="#2a2200" opacity="0.5"/>
-        <!-- người nằm + nâng chân -->
-        <circle cx="60" cy="120" r="14" fill="#EF9F27" opacity="0.9"/>
-        <line x1="60" y1="134" x2="60" y2="168" stroke="#EF9F27" stroke-width="4" stroke-linecap="round"/>
-        <line x1="60" y1="148" x2="36" y2="168" stroke="#EF9F27" stroke-width="3.5" stroke-linecap="round"/>
-        <line x1="60" y1="148" x2="84" y2="168" stroke="#EF9F27" stroke-width="3.5" stroke-linecap="round"/>
-        <!-- chân nằm -->
-        <line x1="60" y1="168" x2="160" y2="168" stroke="#EF9F27" stroke-width="4" stroke-linecap="round"/>
-        <line x1="160" y1="168" x2="200" y2="168" stroke="#EF9F27" stroke-width="4" stroke-linecap="round"/>
-        <!-- chân nâng lên -->
-        <line x1="60" y1="168" x2="155" y2="128" stroke="#BA7517" stroke-width="4" stroke-linecap="round"/>
-        <line x1="155" y1="128" x2="200" y2="124" stroke="#BA7517" stroke-width="4" stroke-linecap="round"/>
-        <!-- góc -->
-        <path d="M 80 165 A 22 22 0 0 0 96 148" stroke="#EF9F27" stroke-width="1.5" stroke-dasharray="3 4" fill="none" opacity="0.6"/>
-        <text x="98" y="155" fill="#EF9F27" font-size="11" font-family="monospace" opacity="0.8">45°</text>
-        <!-- mũi tên -->
-        <path d="M 165 122 L 180 112 L 178 124" fill="#EF9F27" opacity="0.5"/>
-      </svg>
+      <video id="demo-video" playsinline preload="metadata"
+             style="position:relative;z-index:1;width:100%;height:100%;object-fit:contain;background:#000;display:block;"></video>
+      <div id="demo-empty" style="position:absolute;z-index:2;color:#777;font-size:13px;">Chọn bài để xem video mẫu</div>
+      <div style="position:absolute;z-index:2;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:10px;">
+        <button onclick="document.getElementById('demo-video').play()"
+                style="background:#e8a020;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">▶ Chạy mẫu</button>
+        <button onclick="document.getElementById('demo-video').pause()"
+                style="background:transparent;color:#ccc;border:1px solid #555;padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer;">■ Dừng</button>
+      </div>
     </div>
 
     <!-- Camera -->
@@ -671,8 +654,7 @@
       <img id="cam-feed"
            src=""
            alt="Camera"
-           style="width:100%;height:100%;object-fit:cover;display:block;"
-           onerror="this.style.opacity='0.2'"/>
+           style="width:100%;height:100%;object-fit:contain;display:block;"/>
       <div class="rep-overlay">
         <div class="rep-num" id="repNum">8</div>
         <div class="rep-of">/ 15 reps</div>
@@ -686,28 +668,6 @@
     <!-- Sidebar -->
     <div class="sidebar">
 
-      <!-- Set progress -->
-      <div class="sb-section">
-        <div class="sb-label">Tiến độ set</div>
-        <div class="set-cards">
-          <div class="set-c done">
-            <div class="set-c-num">SET 1 ✓</div>
-            <div class="set-c-val">15</div>
-            <div class="set-c-sub">reps</div>
-          </div>
-          <div class="set-c active">
-            <div class="set-c-num">SET 2 ▶</div>
-            <div class="set-c-val" id="liveRep">8</div>
-            <div class="set-c-sub">/ 15</div>
-          </div>
-          <div class="set-c">
-            <div class="set-c-num">SET 3</div>
-            <div class="set-c-val">—</div>
-            <div class="set-c-sub">chờ</div>
-          </div>
-        </div>
-      </div>
-
       <!-- Số liệu -->
       <div class="sb-section">
         <div class="sb-label">Số liệu</div>
@@ -717,11 +677,11 @@
             <div class="stat-item-val" id="totalReps">23</div>
             <div class="stat-item-sub">mục tiêu 45</div>
           </div>
-          <div class="stat-item">
+          <!-- <div class="stat-item">
             <div class="stat-item-label">Tư thế</div>
             <div class="stat-item-val" style="color:#3ecf74">94%</div>
             <div class="stat-item-sub">chính xác</div>
-          </div>
+          </div>-->
         </div>
       </div>
 
@@ -757,15 +717,9 @@
   <div class="session-bottom">
     <button class="btn-stop-sm" onclick="doEndSession()">■ Kết thúc</button>
     <button class="btn-pause-sm" id="btn-pause" onclick="togglePause()">⏸ Tạm dừng</button>
+    <button class="btn-pause-sm" id="btn-toggle-video" onclick="toggleVideoBox()">⊞ Hiện video mẫu</button>
     <div class="session-bottom-mid">
-      <div class="set-dots">
-        <div class="set-dot done"></div>
-        <div class="set-dot active"></div>
-        <div class="set-dot"></div>
-        <span style="color:#666; font-size:12px; margin-left:6px">Set 2 / 3</span>
-      </div>
     </div>
-    <button class="btn-next-set" onclick="goTo('ket-thuc')">Hoàn thành Set 2 →</button>
   </div>
 </div>
 
@@ -782,7 +736,7 @@
     <div class="result-stats">
       <div class="result-stat">
         <div class="result-stat-val" id="resSets">—</div>
-        <div class="result-stat-label">Tổng sets</div>
+        <div class="result-stat-label">Reps đạt</div>
       </div>
       <div class="result-stat">
         <div class="result-stat-val" id="resTime">—</div>
@@ -790,7 +744,7 @@
       </div>
       <div class="result-stat">
         <div class="result-stat-val" id="resForm" style="color:#3ecf74">—</div>
-        <div class="result-stat-label">Tư thế đúng</div>
+        <div class="result-stat-label">Điểm tổng</div>
       </div>
     </div>
 
@@ -994,25 +948,10 @@ async function doStartSession() {
   S.prescribedRep = repEl ? (parseInt(repEl.value) || 10) : 10;
 
   try {
-    // Map tên DB → exercise_key trong camera.py
-    const KEY_MAP = {
-      'gập/duỗi khuỷu tay':    'Gap/duoi khuyu tay',
-      'duỗi tay trên đầu':     'Gap/duoi khuyu tay',
-      'gập cánh tay đứng':     'Gap/duoi khuyu tay',
-      'duỗi khuỷu nhờ trọng lực': 'Gap/duoi khuyu tay',
-      'trượt gối':             'truot goi',
-      'nâng chân thẳng':       'nang chan thang',
-      'ngồi dựa tường':        'squat',
-      'gập gối đứng':          'squat',
-    };
-    const exKey = KEY_MAP[S.selectedEx.ten.toLowerCase()] || S.selectedEx.ten;
-
+    // start_session chỉ cần id + số reps; backend đọc cấu hình từ DB
     const data = await call('start_session',
       S.selectedEx.id,
-      S.selectedEx.ten,
-      exKey,               // exercise_key đúng cho camera.py
       S.prescribedRep,
-      S.selectedEx.khop_tap,
     );
 
     // Cập nhật UI màn hình tập
@@ -1028,7 +967,28 @@ async function doStartSession() {
     const camImg = document.getElementById('cam-feed');
     if (camImg) camImg.src = data.mjpeg_url || S.mjpegUrl;
 
+    // Video mẫu: nạp từ video_url của bài (phục vụ qua server 8765 /clip)
+    const demo = document.getElementById('demo-video');
+    const demoEmpty = document.getElementById('demo-empty');
+    if (demo) {
+      if (S.selectedEx.video_url) {
+        demo.src = 'http://127.0.0.1:8765/clip?f=' + encodeURIComponent(S.selectedEx.video_url);
+        if (demoEmpty) demoEmpty.style.display = 'none';
+      } else {
+        demo.removeAttribute('src'); demo.load();
+        if (demoEmpty) demoEmpty.style.display = '';
+      }
+    }
+
     goTo('tap');
+     // reset so lieu cho buoi moi
+    ['repNum','totalReps'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.textContent = '0';
+    });
+    const note = document.querySelector('.ai-note-text');
+    if (note) note.textContent = 'Đang theo dõi…';
+    const goal = document.querySelector('.stat-item-sub');
+    if (goal) goal.textContent = 'mục tiêu ' + S.prescribedRep;
     _startTimer();
     toast('📷 Camera đã khởi động');
   } catch(e) {}
@@ -1057,14 +1017,23 @@ async function togglePause() {
   try { await call('toggle_pause'); } catch(e) {}
 }
 
+// Thu/phóng ô video mẫu để mở rộng camera theo dõi động tác
+function toggleVideoBox() {
+  const main = document.querySelector('.session-main');
+  if (!main) return;
+  const collapsed = main.classList.toggle('video-collapsed');
+  const btn = document.getElementById('btn-toggle-video');
+  if (btn) btn.textContent = collapsed ? '⊞ Hiện video mẫu' : '⊟ Ẩn video mẫu';
+  const demo = document.getElementById('demo-video');
+  if (collapsed && demo) demo.pause();   // ẩn thì dừng video
+}
+
 // updateRepCount — Python gọi qua evaluate_js
 // Python: _window.evaluate_js(f"updateRepCount({rep}, {total}, {pain})")
 function updateRepCount(rep, total, pain = 0) {
   const repNum = document.getElementById('repNum');
-  const liveRep = document.getElementById('liveRep');
   const totalReps = document.getElementById('totalReps');
   if (repNum)   { repNum.textContent = rep;   repNum.style.color='#fff'; setTimeout(()=>repNum.style.color='#e8a020',180); }
-  if (liveRep)  liveRep.textContent  = rep;
   if (totalReps) totalReps.textContent = total;
 
   if (pain > 0) {
@@ -1142,11 +1111,6 @@ async function saveResult(agreed) {
   } catch(e) {}
 }
 
-// CHỌN BỘ PHẬN (UI gốc — giữ nguyên)
-function selectBP(el) {
-  document.querySelectorAll('.bp-card').forEach(c => c.classList.remove('selected'));
-  el.classList.add('selected');
-}
 </script>
 
 </body>

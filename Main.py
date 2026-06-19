@@ -6,16 +6,25 @@ import json
 
 import webview   # pip install pywebview
 
-from db import init_db, get_patients, get_exercises, get_current_rep, \
+from db import init_db, get_patients, get_exercises, get_exercise, get_current_rep, \
                save_session, confirm_session, get_history
 from brain_engine import BrainEngine, SessionInput, CamData, MicData, JointType
 from camera import WorkoutTracker, start_mjpeg_server, MJPEG_PORT
 
 
 # Xác định đường dẫn app.html cạnh exe
+# File CHI DOC (app.html bundled trong exe) — nam trong _MEIPASS khi dong goi
 def _asset(name: str) -> str:
     if getattr(sys, "frozen", False):
         base = sys._MEIPASS
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, name)
+
+# File CO GHI (brain_states.json) — phai nam canh .exe, KHONG trong _MEIPASS (bi xoa khi thoat)
+def _writable(name: str) -> str:
+    if getattr(sys, "frozen", False):
+        base = os.path.dirname(sys.executable)
     else:
         base = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base, name)
@@ -40,7 +49,7 @@ class _Session:
     def __init__(self): self.reset()
 
 SESSION = _Session()
-BRAIN   = BrainEngine(state_file=_asset("brain_states.json"))
+BRAIN   = BrainEngine(state_file=_writable("brain_states.json"))
 
 # API — mỗi method public được JS gọi qua window.pywebview.api
 class Api:
@@ -94,24 +103,33 @@ class Api:
             return {"ok": False, "error": str(e)}
 
     # 4. Bắt đầu buổi tập
-    def start_session(self, exercise_id: int, exercise_name: str,
-                      exercise_key: str, prescribed_rep: int,
-                      khop_tap: str) -> dict:
+    def start_session(self, exercise_id: int, prescribed_rep: int) -> dict:
         """
-        Khởi động camera (MJPEG stream) + mic.
+        Đọc cấu hình bài tập từ DB, khởi động camera (MJPEG) + mic.
         Sau mỗi rep, gọi evaluate_js('updateRepCount(...)') về UI.
         """
         try:
+            ex = get_exercise(int(exercise_id))
+            if not ex:
+                return {"ok": False, "error": "Không tìm thấy bài tập"}
+
             SESSION.exercise_id    = int(exercise_id)
-            SESSION.exercise_name  = str(exercise_name)
+            SESSION.exercise_name  = ex["ten"]
             SESSION.prescribed_rep = int(prescribed_rep)
             SESSION.start_time     = time.time()
-            khop = khop_tap.lower()
+            khop = (ex["khop_tap"] or "").lower()
             SESSION.joint = JointType.ELBOW if "khuỷu" in khop or "khuyu" in khop \
                             else JointType.KNEE
 
-            # Khởi động WorkoutTracker
-            tracker = WorkoutTracker(exercise_key=exercise_key)
+            # Cấu hình engine lấy thẳng từ DB (không còn hardcode / KEY_MAP)
+            config = {
+                "name":              ex["ten"],
+                "joints":            (ex["lm_a"], ex["lm_b"], ex["lm_c"]),
+                "down_angle":        ex["cam_down_angle"],
+                "up_angle":          ex["cam_up_angle"],
+                "ideal_rep_seconds": (ex["ideal_sec_min"], ex["ideal_sec_max"]),
+            }
+            tracker = WorkoutTracker(config)
             SESSION.tracker = tracker
 
             # Callback: mỗi rep → evaluate_js về UI
@@ -153,9 +171,12 @@ class Api:
                 from pain_counter import PainCryCounter, SpeechRecognizer
                 SESSION.pain_counter    = PainCryCounter()
                 SESSION.pain_recognizer = SpeechRecognizer()
-                SESSION.pain_recognizer.start(
-                    callback=lambda t, r: SESSION.pain_counter.record(t, r)
-                )
+                def _on_mic(t, r, cry=0.0, label="", speech=0.0):
+                    is_pain = SESSION.pain_counter.record(t, r, cry)
+                    if t.strip() or cry > 0.1:
+                        print(f"[MIC] text='{t}' rms={r:.3f} cry={cry:.2f}({label}) "
+                              f"speech={speech:.2f} dau={is_pain} tong={SESSION.pain_counter.pain_count}")
+                SESSION.pain_recognizer.start(callback=_on_mic)
             except Exception as ex:
                 print(f"[MIC] Lỗi: {ex}")
         threading.Thread(target=_loop, daemon=True).start()
@@ -181,7 +202,7 @@ class Api:
             if SESSION.tracker:
                 SESSION.tracker.stop()
                 if SESSION.cam_thread:
-                    SESSION.cam_thread.join(timeout=3.0)
+                    SESSION.cam_thread.join(timeout=10.0)
                 cam_data = SESSION.tracker.get_cam_data()
 
             # Dừng mic
@@ -192,7 +213,8 @@ class Api:
             if SESSION.pain_counter:
                 pain_count = SESSION.pain_counter.pain_count
 
-            elapsed = int(time.time() - SESSION.start_time)
+            elapsed = int(SESSION.tracker.elapsed()) if SESSION.tracker \
+                      else int(time.time() - SESSION.start_time)
             duration = f"{elapsed//60:02d}:{elapsed%60:02d}"
             form_score = round((cam_data["speed_score"] + cam_data["rom_score"]) / 2, 1)
 
@@ -287,11 +309,11 @@ class Api:
             if agreed:
                 confirm_session(sid, data["patient_id"], data["exercise_id"], final_reps)
                 BRAIN.confirm_recommendation(
-                    str(data["patient_id"]), str(data["exercise_id"]), final_reps
+                    str(data["patient_id"]), str(data["exercise_id"]), SESSION.prescribed_rep
                 )
             else:
                 BRAIN.reject_recommendation(
-                    str(data["patient_id"]), str(data["exercise_id"])
+                    str(data["patient_id"]), str(data["exercise_id"]), SESSION.prescribed_rep
                 )
 
             SESSION.last_rec = None

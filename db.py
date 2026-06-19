@@ -97,16 +97,18 @@ def init_db():
     conn = get_db()
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS rehab_exercises (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        khop_tap    TEXT    NOT NULL,
-        ten         TEXT    NOT NULL,
-        up_angle    TEXT    NOT NULL,
-        down_angle  TEXT    NOT NULL,
-        diem_a      TEXT    NOT NULL,
-        diem_b      TEXT    NOT NULL,
-        diem_c      TEXT    NOT NULL,
-        huong_dan   TEXT    NOT NULL,
-        video_url   TEXT
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        khop_tap       TEXT    NOT NULL,
+        ten            TEXT    NOT NULL,
+        huong_dan      TEXT    NOT NULL,
+        video_url      TEXT,
+        lm_a           INTEGER NOT NULL,   -- landmark MediaPipe diem A
+        lm_b           INTEGER NOT NULL,   -- diem B (dinh goc)
+        lm_c           INTEGER NOT NULL,   -- diem C
+        cam_down_angle INTEGER NOT NULL,   -- nguong goc pha "gap"
+        cam_up_angle   INTEGER NOT NULL,   -- nguong goc pha "duoi"
+        ideal_sec_min  REAL    NOT NULL,   -- thoi gian/rep ly tuong (min)
+        ideal_sec_max  REAL    NOT NULL    -- (max)
     );
 
     CREATE TABLE IF NOT EXISTS patient (
@@ -163,37 +165,47 @@ def init_db():
     """)
     conn.commit()
 
-    # Dữ liệu mẫu bài tập
+    # Dữ liệu mẫu bài tập (schema moi: dong bo voi build_db.py)
+    # (khop_tap,ten,huong_dan,video_url, lm_a,lm_b,lm_c, cam_down,cam_up, sec_min,sec_max)
     if conn.execute("SELECT COUNT(*) FROM rehab_exercises").fetchone()[0] == 0:
         conn.executemany("""
             INSERT INTO rehab_exercises
-                (khop_tap,ten,up_angle,down_angle,diem_a,diem_b,diem_c,huong_dan)
-            VALUES (?,?,?,?,?,?,?,?)
+                (khop_tap,ten,huong_dan,video_url,
+                 lm_a,lm_b,lm_c,cam_down_angle,cam_up_angle,ideal_sec_min,ideal_sec_max)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
         """, [
             ("đầu gối","trượt gối",
-             "60-90","160-170","hông","đầu gối","cổ chân",
-             "Sử dụng đầu gối để co chân. Nâng đầu gối lên xuống."),
+             "Sử dụng đầu gối để co chân. Nâng đầu gối lên xuống.",
+             "video/01_truot_goi.mp4",
+             23,25,27,60,165,2.5,5.0),
             ("đầu gối","nâng chân thẳng",
-             "30-45","0-5","hông","đầu gối","cổ chân",
-             "Giữ nguyên chân thẳng, nâng toàn bộ chân lên xuống."),
+             "Giữ nguyên chân thẳng, nâng toàn bộ chân lên xuống.",
+             "video/02_nang_chan_thang.mp4",
+             11,23,25,145,165,3.0,6.0),
             ("đầu gối","ngồi dựa tường",
-             "160-170","85-95","hông","đầu gối","cổ chân",
-             "Đứng dựa lưng vào tường, trượt xuống đến góc đầu gối = 90°."),
+             "Đứng dựa lưng vào tường, trượt xuống đến góc đầu gối = 90°.",
+             "video/03_ngoi_dua_tuong.mp4",
+             23,25,27,90,160,2.5,5.0),
             ("đầu gối","gập gối đứng",
-             "100-130","40-60","hông","đầu gối","cổ chân",
-             "Đứng thẳng, giữ tựa tay vào tường. Gập một đầu gối đưa gót về phía mông."),
+             "Đứng thẳng, giữ tựa tay vào tường. Gập một đầu gối đưa gót về phía mông.",
+             "video/04_gap_goi_dung.mp4",
+             23,25,27,60,160,2.5,5.0),
             ("khuỷu tay","gập/duỗi khuỷu tay",
-             "30-45","160-175","vai","khuỷu tay","cổ tay",
-             "Gập khuỷu tay, tay để trên mặt phẳng."),
+             "Gập khuỷu tay, tay để trên mặt phẳng.",
+             "video/05_gap_duoi_khuyu_tay.mp4",
+             12,14,16,35,165,2.0,4.0),
             ("khuỷu tay","duỗi tay trên đầu",
-             "160-170","40-60","vai","khuỷu tay","cổ tay",
-             "Cánh tay dựng thẳng đứng, gập khuỷu ra sau đầu."),
+             "Cánh tay dựng thẳng đứng, gập khuỷu ra sau đầu.",
+             "video/06_duoi_tay_tren_dau.mp4",
+             12,14,16,45,165,2.0,4.0),
             ("khuỷu tay","gập cánh tay đứng",
-             "30-50","160-175","vai","khuỷu tay","cổ tay",
-             "Gập khuỷu tay, duỗi hoàn toàn cánh tay."),
+             "Gập khuỷu tay, duỗi hoàn toàn cánh tay.",
+             "video/07_gap_canh_tay_dung.mp4",
+             12,14,16,35,165,2.0,4.0),
             ("khuỷu tay","duỗi khuỷu nhờ trọng lực",
-             "35-55","160-175","vai","khuỷu tay","cổ tay",
-             "Giữ nguyên cánh tay lơ lửng trên không."),
+             "Giữ nguyên cánh tay lơ lửng trên không.",
+             "video/08_duoi_khuyu_nho_trong_luc.mp4",
+             12,14,16,40,165,2.0,4.0),
         ])
         conn.commit()
 
@@ -225,8 +237,9 @@ def add_patient(name: str, dob: Optional[str] = None, gender: Optional[str] = No
 
 def get_exercises() -> list[dict]:
     rows = _all("""
-        SELECT id, khop_tap, ten, up_angle, down_angle,
-               diem_a, diem_b, diem_c, huong_dan, video_url
+        SELECT id, khop_tap, ten, huong_dan, video_url,
+               lm_a, lm_b, lm_c, cam_down_angle, cam_up_angle,
+               ideal_sec_min, ideal_sec_max
         FROM rehab_exercises ORDER BY khop_tap, id
     """)
     return [dict(r) for r in rows]
@@ -242,16 +255,6 @@ def get_current_rep(patient_id: int, exercise_id: int) -> int:
         WHERE patient_id=? AND exercise_id=?
     """, (patient_id, exercise_id))
     return row["current_rep"] if row else 10
-
-# Tương đương sp_confirm_adjustment
-def confirm_adjustment(patient_id: int, exercise_id: int, new_rep: int):
-    """Cập nhật current_config sau khi bệnh nhân đồng ý."""
-    _run("""
-        INSERT INTO current_config (patient_id, exercise_id, current_rep, updated_at)
-        VALUES (?,?,?,datetime('now','localtime'))
-        ON CONFLICT(patient_id, exercise_id)
-        DO UPDATE SET current_rep=excluded.current_rep, updated_at=excluded.updated_at
-    """, (patient_id, exercise_id, new_rep))
 
 # Tương đương sp_save_session
 def save_session(
