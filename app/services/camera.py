@@ -21,6 +21,8 @@ import os
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 
+from app import config
+
 MJPEG_PORT   = 8765
 CAMERA_INDEX = 0
 FRAME_WIDTH  = 1280
@@ -154,10 +156,9 @@ class _MJPEGHandler(BaseHTTPRequestHandler):
 
     def _serve_clip(self):
         # Phuc vu file video trong thu muc video/, ho tro Range (206) cho <video>
-        rel  = unquote((parse_qs(urlparse(self.path).query).get("f") or [""])[0]).replace("\\", "/")
-        base = os.path.dirname(os.path.abspath(__file__))
-        path = os.path.normpath(os.path.join(base, rel))
-        vdir = os.path.join(base, "video")
+        rel  = unquote((parse_qs(urlparse(self.path).query).get("f") or [""])[0])
+        path = os.path.normpath(os.path.join(config.VIDEO_DIR, os.path.basename(rel)))
+        vdir = config.VIDEO_DIR
         if not path.startswith(vdir) or not os.path.isfile(path):
             self.send_response(404); self.end_headers(); return
         try:
@@ -234,7 +235,8 @@ def txt(img,text,pos,scale,color,thick=2):
 def fmt_time(s):
     return f"{int(s)//60:02d}:{int(s)%60:02d}"
 
-def ensure_model(path="pose_landmarker_full.task"):
+def ensure_model(path=None):
+    if path is None: path = config.model("pose_landmarker_full.task")
     if os.path.exists(path): return path
     url=("https://storage.googleapis.com/mediapipe-models/"
          "pose_landmarker/pose_landmarker_full/float16/latest/"

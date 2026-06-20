@@ -15,6 +15,8 @@ from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import audio as mp_audio
 from mediapipe.tasks.python.components import containers as mp_containers
 
+from app import config
+
 
 # ── Cai dat ──────────────────────────────────────────────────────────────────
 SAMPLE_RATE      = 16000   # Hz (YAMNet + Whisper deu dung 16k)
@@ -73,7 +75,9 @@ def score_text(text: str) -> tuple[float, list[str]]:
     return total, hits
 
 
-def ensure_yamnet(path: str = "yamnet.tflite") -> str:
+def ensure_yamnet(path: str = None) -> str:
+    if path is None:
+        path = config.model("yamnet.tflite")
     if os.path.exists(path):
         return path
     url = ("https://storage.googleapis.com/mediapipe-models/"

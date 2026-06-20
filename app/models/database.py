@@ -14,16 +14,9 @@ import sys
 from datetime import date, datetime
 from typing import Optional
 
-# ── Xác định đường dẫn DB cạnh exe hoặc cạnh script ─────────────────────────
-def _db_path() -> str:
-    if getattr(sys, "frozen", False):
-        # Đang chạy từ PyInstaller .exe
-        base = os.path.dirname(sys.executable)
-    else:
-        base = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(base, "rehab.db")
-
-DB_FILE = _db_path()
+# ── Đường dẫn DB lấy từ config (data/ cạnh exe khi đóng gói, data/ ở gốc khi dev) ──
+from app.config import data
+DB_FILE = data("rehab.db")
 
 
 # ── Connection factory ────────────────────────────────────────────────────────
@@ -176,35 +169,35 @@ def init_db():
         """, [
             ("đầu gối","trượt gối",
              "Sử dụng đầu gối để co chân. Nâng đầu gối lên xuống.",
-             "video/01_truot_goi.mp4",
+             "01_truot_goi.mp4",
              23,25,27,60,165,2.5,5.0),
             ("đầu gối","nâng chân thẳng",
              "Giữ nguyên chân thẳng, nâng toàn bộ chân lên xuống.",
-             "video/02_nang_chan_thang.mp4",
+             "02_nang_chan_thang.mp4",
              11,23,25,145,165,3.0,6.0),
             ("đầu gối","ngồi dựa tường",
              "Đứng dựa lưng vào tường, trượt xuống đến góc đầu gối = 90°.",
-             "video/03_ngoi_dua_tuong.mp4",
+             "03_ngoi_dua_tuong.mp4",
              23,25,27,90,160,2.5,5.0),
             ("đầu gối","gập gối đứng",
              "Đứng thẳng, giữ tựa tay vào tường. Gập một đầu gối đưa gót về phía mông.",
-             "video/04_gap_goi_dung.mp4",
+             "04_gap_goi_dung.mp4",
              23,25,27,60,160,2.5,5.0),
             ("khuỷu tay","gập/duỗi khuỷu tay",
              "Gập khuỷu tay, tay để trên mặt phẳng.",
-             "video/05_gap_duoi_khuyu_tay.mp4",
+             "05_gap_duoi_khuyu_tay.mp4",
              12,14,16,35,165,2.0,4.0),
             ("khuỷu tay","duỗi tay trên đầu",
              "Cánh tay dựng thẳng đứng, gập khuỷu ra sau đầu.",
-             "video/06_duoi_tay_tren_dau.mp4",
+             "06_duoi_tay_tren_dau.mp4",
              12,14,16,45,165,2.0,4.0),
             ("khuỷu tay","gập cánh tay đứng",
              "Gập khuỷu tay, duỗi hoàn toàn cánh tay.",
-             "video/07_gap_canh_tay_dung.mp4",
+             "07_gap_canh_tay_dung.mp4",
              12,14,16,35,165,2.0,4.0),
             ("khuỷu tay","duỗi khuỷu nhờ trọng lực",
              "Giữ nguyên cánh tay lơ lửng trên không.",
-             "video/08_duoi_khuyu_nho_trong_luc.mp4",
+             "08_duoi_khuyu_nho_trong_luc.mp4",
              12,14,16,40,165,2.0,4.0),
         ])
         conn.commit()

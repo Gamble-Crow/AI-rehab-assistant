@@ -6,28 +6,11 @@ import json
 
 import webview   # pip install pywebview
 
-from db import init_db, get_patients, get_exercises, get_exercise, get_current_rep, \
-               save_session, confirm_session, get_history
-from brain_engine import BrainEngine, SessionInput, CamData, MicData, JointType
-from camera import WorkoutTracker, start_mjpeg_server, MJPEG_PORT
-
-
-# Xác định đường dẫn app.html cạnh exe
-# File CHI DOC (app.html bundled trong exe) — nam trong _MEIPASS khi dong goi
-def _asset(name: str) -> str:
-    if getattr(sys, "frozen", False):
-        base = sys._MEIPASS
-    else:
-        base = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(base, name)
-
-# File CO GHI (brain_states.json) — phai nam canh .exe, KHONG trong _MEIPASS (bi xoa khi thoat)
-def _writable(name: str) -> str:
-    if getattr(sys, "frozen", False):
-        base = os.path.dirname(sys.executable)
-    else:
-        base = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(base, name)
+from app.config import view, data
+from app.models.database import init_db, get_patients, get_exercises, get_exercise, \
+               get_current_rep, save_session, confirm_session, get_history
+from app.models.brain_engine import BrainEngine, SessionInput, CamData, MicData, JointType
+from app.services.camera import WorkoutTracker, start_mjpeg_server, MJPEG_PORT
 
 # SESSION STATE
 class _Session:
@@ -49,7 +32,7 @@ class _Session:
     def __init__(self): self.reset()
 
 SESSION = _Session()
-BRAIN   = BrainEngine(state_file=_writable("brain_states.json"))
+BRAIN   = BrainEngine(state_file=data("brain_states.json"))
 
 # API — mỗi method public được JS gọi qua window.pywebview.api
 class Api:
@@ -69,7 +52,7 @@ class Api:
     # 1b. Tạo bệnh nhân mới + đăng nhập (JS gọi khi nhập tên mới)
     def add_patient_and_login(self, patient_name: str) -> dict:
         try:
-            from db import add_patient
+            from app.models.database import add_patient
             new_id = add_patient(str(patient_name))
             SESSION.reset()
             SESSION.patient_id   = new_id
@@ -168,7 +151,7 @@ class Api:
     def _start_mic(self):
         def _loop():
             try:
-                from pain_counter import PainCryCounter, SpeechRecognizer
+                from app.services.pain_detector import PainCryCounter, SpeechRecognizer
                 SESSION.pain_counter    = PainCryCounter()
                 SESSION.pain_recognizer = SpeechRecognizer()
                 def _on_mic(t, r, cry=0.0, label="", speech=0.0):
@@ -332,7 +315,7 @@ class Api:
 # ENTRY POINT
 _window: webview.Window = None
 
-def main():
+def run():
     global _window
 
     # Khởi tạo DB
@@ -347,7 +330,7 @@ def main():
     # Tạo cửa sổ PyWebView duy nhất
     _window = webview.create_window(
         title       = "PhụcHồi",
-        url         = _asset("app.html"),
+        url         = view("app.html"),
         js_api      = api,
         width       = 1280,
         height      = 800,
@@ -357,7 +340,3 @@ def main():
 
     # Chạy — blocking cho đến khi đóng cửa sổ
     webview.start(debug=False)
-
-
-if __name__ == "__main__":
-    main()
