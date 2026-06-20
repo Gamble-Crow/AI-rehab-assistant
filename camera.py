@@ -4,7 +4,7 @@ camera.py — WorkoutTracker + MJPEG server ngầm
 - Không còn cv2.imshow() / cửa sổ riêng
 - MJPEG server chạy ngầm trên http://127.0.0.1:MJPEG_PORT/video
 - app.html nhúng: <img src="http://127.0.0.1:8765/video">
-- Giữ nguyên toàn bộ logic đếm rep, tính góc, MediaPipe, YOLO
+- Pose bằng MediaPipe (đã bỏ YOLO); góc khớp tính từ landmark 3D
 - Giữ nguyên get_cam_data()
 """
 
@@ -13,7 +13,6 @@ import mediapipe as mp
 import numpy as np
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
-from ultralytics import YOLO
 import time
 import urllib.request
 from urllib.parse import urlparse, parse_qs, unquote
@@ -91,16 +90,8 @@ C = {
     "skeleton":(50,200,50),"joint":(0,140,255),
 }
 
-# ── Cache model: nap 1 lan, dung lai moi buoi ──
-_YOLO_MODEL = None
+# ── Cache model MediaPipe: nap 1 lan, dung lai moi buoi ──
 _LANDMARKER = None
-
-def _get_yolo():
-    global _YOLO_MODEL
-    if _YOLO_MODEL is None:
-        print("[INFO] Loading YOLO (once)...")
-        _YOLO_MODEL = YOLO("yolov8n.pt")
-    return _YOLO_MODEL
 
 def _get_landmarker():
     global _LANDMARKER
@@ -221,6 +212,13 @@ def calc_angle(a, b, c):
     cos=np.dot(ba,bc)/(np.linalg.norm(ba)*np.linalg.norm(bc)+1e-6)
     return float(np.degrees(np.arccos(np.clip(cos,-1.,1.))))
 
+def calc_angle_3d(a, b, c):
+    # Goc tu landmark 3D (x,y,z met) -> dung that, khong phu thuoc goc dat camera
+    a=np.array([a.x,a.y,a.z]); b=np.array([b.x,b.y,b.z]); c=np.array([c.x,c.y,c.z])
+    ba=a-b; bc=c-b
+    cos=np.dot(ba,bc)/(np.linalg.norm(ba)*np.linalg.norm(bc)+1e-6)
+    return float(np.degrees(np.arccos(np.clip(cos,-1.,1.))))
+
 def rounded_rect(img,x,y,w,h,r,color,alpha=0.7):
     ov=img.copy()
     cv2.rectangle(ov,(x+r,y),(x+w-r,y+h),color,-1)
@@ -255,7 +253,6 @@ class WorkoutTracker:
     def __init__(self, config: dict):
         # config lay tu DB qua start_session:
         #   {"name","joints":(a,b,c),"down_angle","up_angle","ideal_rep_seconds":(lo,hi)}
-        self.yolo       = _get_yolo()
         self.landmarker = _get_landmarker()
 
         self._cfg = config
@@ -323,8 +320,9 @@ class WorkoutTracker:
         mp_img=mp.Image(image_format=mp.ImageFormat.SRGB,data=rgb)
         res=self.landmarker.detect_for_video(mp_img,timestamp_ms)
         if res.pose_landmarks and len(res.pose_landmarks)>0:
-            return res.pose_landmarks[0],w_c,h_c,off
-        return None,w_c,h_c,off
+            world = res.pose_world_landmarks[0] if res.pose_world_landmarks else None
+            return res.pose_landmarks[0], world, w_c, h_c, off
+        return None, None, w_c, h_c, off
 
     def count_rep(self, angle: float) -> bool:
         ex=self.ce; k=self.ck; st=self.stages[k]
@@ -469,19 +467,9 @@ class WorkoutTracker:
 
             timestamp_ms=int(time.time()*1000)
 
-            # YOLO
-            best_box=None; best_conf=0.0
-            yres=self.yolo(frame,classes=[0],verbose=False)[0]
-            for box in yres.boxes:
-                conf=float(box.conf[0])
-                if conf>best_conf: best_conf=conf; best_box=tuple(map(int,box.xyxy[0]))
-            if best_box and DISPLAY_CONFIG["show_bounding_box"]:
-                x1,y1,x2,y2=best_box
-                cv2.rectangle(frame,(x1,y1),(x2,y2),C["accent"],2)
-
-            # MediaPipe
+            # MediaPipe Pose tren TOAN khung (da bo YOLO)
             try:
-                lms,wc,hc,off=self.detect_pose(frame,timestamp_ms,best_box)
+                lms,lms_world,wc,hc,off=self.detect_pose(frame,timestamp_ms)
             except RuntimeError as e:
                 if "shutdown" in str(e):   # app dang dong -> MediaPipe da tat worker, thoat em
                     break
@@ -493,7 +481,11 @@ class WorkoutTracker:
                 def lm_px(i):
                     lm=lms[i]; return (int(lm.x*wc)+ox,int(lm.y*hc)+oy)
                 pa,pb,pc=lm_px(ji[0]),lm_px(ji[1]),lm_px(ji[2])
-                self.angle=calc_angle(pa,pb,pc)
+                # Goc tu landmark 3D (chuan, khong phu thuoc goc dat camera); du phong 2D
+                if lms_world is not None:
+                    self.angle=calc_angle_3d(lms_world[ji[0]],lms_world[ji[1]],lms_world[ji[2]])
+                else:
+                    self.angle=calc_angle(pa,pb,pc)
                 new_rep=self.count_rep(self.angle)
                 if new_rep:
                     flash_n=5
