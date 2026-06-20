@@ -158,7 +158,7 @@ def init_db():
     """)
     conn.commit()
 
-    # Dữ liệu mẫu bài tập (schema moi: dong bo voi build_db.py)
+    # Dữ liệu mẫu bài tập (ngưỡng góc đã calibrate từ video)
     # (khop_tap,ten,huong_dan,video_url, lm_a,lm_b,lm_c, cam_down,cam_up, sec_min,sec_max)
     if conn.execute("SELECT COUNT(*) FROM rehab_exercises").fetchone()[0] == 0:
         conn.executemany("""
