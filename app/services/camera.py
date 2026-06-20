@@ -11,6 +11,7 @@ camera.py — WorkoutTracker + MJPEG server ngầm
 import cv2
 import mediapipe as mp
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
 import time
@@ -29,7 +30,7 @@ FRAME_WIDTH  = 1280
 FRAME_HEIGHT = 720
 
 # Tang sang phong toi bang gamma (chinh tay): <1 = sang hon, lift vung toi manh
-CAM_GAMMA  = 0.55
+CAM_GAMMA  = 0.78
 _GAMMA_LUT = np.array([((i / 255.0) ** CAM_GAMMA) * 255 for i in range(256)], dtype=np.uint8)
 
 DISPLAY_CONFIG = {
@@ -228,9 +229,33 @@ def rounded_rect(img,x,y,w,h,r,color,alpha=0.7):
         cv2.circle(ov,(cx,cy),r,color,-1)
     cv2.addWeighted(ov,alpha,img,1-alpha,0,img)
 
-def txt(img,text,pos,scale,color,thick=2):
-    cv2.putText(img,text,pos,cv2.FONT_HERSHEY_SIMPLEX,scale,C["black"],thick+2,cv2.LINE_AA)
-    cv2.putText(img,text,pos,cv2.FONT_HERSHEY_SIMPLEX,scale,color,thick,cv2.LINE_AA)
+# ── Vẽ chữ Unicode (tiếng Việt) bằng PIL ──
+_FONT_FILE  = "C:/Windows/Fonts/arial.ttf"
+_FONT_CACHE = {}
+def _font(px):
+    f = _FONT_CACHE.get(px)
+    if f is None:
+        try:    f = ImageFont.truetype(_FONT_FILE, px)
+        except Exception: f = ImageFont.load_default()
+        _FONT_CACHE[px] = f
+    return f
+
+def _draw_texts(img, items):
+    # items: [(text, (x, y_baseline), scale, color_bgr, thick), ...] — vẽ 1 lần/khung
+    try:
+        pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        d   = ImageDraw.Draw(pil)
+        for text, pos, scale, color, thick in items:
+            px  = max(13, int(scale * 34))
+            rgb = (int(color[2]), int(color[1]), int(color[0]))   # BGR -> RGB
+            d.text((pos[0], pos[1] - px), str(text), font=_font(px), fill=rgb,
+                   stroke_width=max(1, thick - 1), stroke_fill=(0, 0, 0))
+        img[:] = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
+    except Exception:
+        pass
+
+def txt(img, text, pos, scale, color, thick=2):
+    _draw_texts(img, [(text, pos, scale, color, thick)])
 
 def fmt_time(s):
     return f"{int(s)//60:02d}:{int(s)%60:02d}"
@@ -274,7 +299,7 @@ class WorkoutTracker:
         self._rep_speeds       = {k: []    for k in keys}
         self._rep_roms         = {k: []    for k in keys}
 
-        self.STABLE_FRAMES_REQUIRED = 10
+        self.STABLE_FRAMES_REQUIRED = 5
         self._stable_frames = {k: 0     for k in keys}
         self._ready         = {k: False for k in keys}
 
@@ -391,44 +416,47 @@ class WorkoutTracker:
 
     def draw_ui(self, frame, flash=False):
         H,W=frame.shape[:2]; k=self.ck
-        rounded_rect(frame,10,10,300,200,12,C["bg"],0.75)
+        rounded_rect(frame,10,10,300,210,12,C["bg"],0.75)
+        items=[]            # gom chữ -> vẽ 1 lần (tiếng Việt, PIL)
         y=45
         if DISPLAY_CONFIG["show_exercise_name"]:
-            n=self.ce["name"]; txt(frame,n[:22],(20,y),0.52,C["accent"],2); y+=22
+            items.append((self.ce["name"][:24],(20,y),0.5,C["accent"],2)); y+=24
         if DISPLAY_CONFIG["show_rep_count"]:
-            txt(frame,f"REP: {self.reps[k]}",(20,y+30),1.4,
-                C["yellow"] if flash else C["green"],3); y+=65
+            items.append((f"Số lần: {self.reps[k]}",(20,y+30),1.2,
+                          C["yellow"] if flash else C["green"],3)); y+=65
         if not self._ready[k]:
             pct=int((self._stable_frames[k]/self.STABLE_FRAMES_REQUIRED)*80)
             cv2.rectangle(frame,(20,y),(100,y+12),(60,60,60),-1)
             cv2.rectangle(frame,(20,y),(20+pct,y+12),C["orange"],-1)
-            txt(frame,f"Stabilizing: {self._stable_frames[k]}/{self.STABLE_FRAMES_REQUIRED}",
-                (20,y+26),0.45,C["orange"],1); y+=40
+            items.append((f"Đang ổn định {self._stable_frames[k]}/{self.STABLE_FRAMES_REQUIRED}",
+                          (20,y+28),0.45,C["orange"],1)); y+=42
         else:
-            txt(frame,"READY",(20,y),0.6,C["green"],2); y+=24
+            items.append(("Sẵn sàng",(20,y),0.6,C["green"],2)); y+=26
         if DISPLAY_CONFIG["show_stage"]:
-            st=(self.stages[k] or "---").upper()
-            txt(frame,f"Stage: {st}",(20,y),0.65,
-                C["green"] if st=="UP" else C["orange"],2); y+=28
+            stage=self.stages[k]
+            st_vi={"up":"Duỗi","down":"Gập"}.get(stage,"—")
+            items.append((f"Pha: {st_vi}",(20,y),0.55,
+                          C["green"] if stage=="up" else C["orange"],2)); y+=28
         if DISPLAY_CONFIG["show_angle"]:
-            txt(frame,f"Angle: {int(self.angle)}",(20,y),0.65,C["yellow"],2); y+=28
+            items.append((f"Góc: {int(self.angle)}°",(20,y),0.55,C["yellow"],2)); y+=28
         if DISPLAY_CONFIG["show_timer"]:
-            tl="PAUSED" if self.paused else fmt_time(self.elapsed())
-            txt(frame,f"Time: {tl}",(20,y),0.65,
-                C["red"] if self.paused else C["cyan"],2)
+            tl="Tạm dừng" if self.paused else fmt_time(self.elapsed())
+            items.append((f"Thời gian: {tl}",(20,y),0.55,
+                          C["red"] if self.paused else C["cyan"],2))
         if DISPLAY_CONFIG["show_fps"]:
-            txt(frame,f"FPS: {self.fps}",(W-120,35),0.65,C["white"],2)
+            items.append((f"FPS: {self.fps}",(W-120,35),0.55,C["white"],2))
         ex=self.ce; bx,by,bw,bh=20,H-50,260,16
         norm=np.clip((self.angle-ex["down_angle"]+10)/(ex["up_angle"]-ex["down_angle"]+20),0,1)
         rounded_rect(frame,bx-4,by-4,bw+8,bh+8,6,C["bg"],0.7)
         cv2.rectangle(frame,(bx,by),(bx+bw,by+bh),(60,60,60),-1)
         cv2.rectangle(frame,(bx,by),(bx+int(norm*bw),by+bh),
                       C["green"] if self.stages[k]=="up" else C["orange"],-1)
-        txt(frame,"Angle range",(bx,by-8),0.45,C["white"],1)
+        items.append(("Biên độ góc",(bx,by-8),0.42,C["white"],1))
         if flash:
             ov=frame.copy()
             cv2.rectangle(ov,(0,0),(W,H),C["green"],-1)
             cv2.addWeighted(ov,0.12,frame,0.88,0,frame)
+        _draw_texts(frame, items)
 
     def run(self):
         """
@@ -438,7 +466,7 @@ class WorkoutTracker:
         """
         # Xoa frame cu cua buoi truoc -> hien placeholder "dang khoi dong"
         _ph = np.zeros((FRAME_HEIGHT, FRAME_WIDTH, 3), np.uint8)
-        txt(_ph, "Dang khoi dong camera...", (60, FRAME_HEIGHT // 2), 1.0, C["white"], 2)
+        txt(_ph, "Đang khởi động camera...", (60, FRAME_HEIGHT // 2), 1.0, C["white"], 2)
         _set_frame(_ph)
 
         cap=cv2.VideoCapture(CAMERA_INDEX)
@@ -446,7 +474,7 @@ class WorkoutTracker:
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
         if not cap.isOpened():
             _err = np.zeros((FRAME_HEIGHT, FRAME_WIDTH, 3), np.uint8)
-            txt(_err, "KHONG MO DUOC CAMERA", (60, FRAME_HEIGHT // 2), 1.0, C["red"], 2)
+            txt(_err, "Không mở được camera", (60, FRAME_HEIGHT // 2), 1.0, C["red"], 2)
             _set_frame(_err)
             print("[ERR] Cannot open camera."); return
 
