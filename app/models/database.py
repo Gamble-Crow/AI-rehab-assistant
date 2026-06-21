@@ -174,7 +174,7 @@ def init_db():
             ("đầu gối","nâng chân thẳng",
              "Giữ nguyên chân thẳng, nâng toàn bộ chân lên xuống.",
              "02_nang_chan_thang.mp4",
-             11,23,25,142,161,3.0,6.0),
+             11,23,25,135,166,3.0,6.0),
             ("đầu gối","ngồi dựa tường",
              "Đứng dựa lưng vào tường, trượt xuống đến góc đầu gối = 90°.",
              "03_ngoi_dua_tuong.mp4",
