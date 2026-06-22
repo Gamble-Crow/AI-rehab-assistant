@@ -8,6 +8,7 @@ a = Analysis(
     datas=[
         ('app/views/app.html', 'app/views'),
         ('assets/ai_models/pose_landmarker_full.task', 'assets/ai_models'),
+        ('assets/ai_models/yamnet.tflite', 'assets/ai_models'),
         ('assets/videos', 'assets/videos'),
     ],
     hiddenimports=[],

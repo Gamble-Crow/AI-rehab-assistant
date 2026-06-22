@@ -8,7 +8,7 @@ import webview   # pip install pywebview
 
 from app.config import view, data
 from app.models.database import init_db, get_patients, get_exercises, get_exercise, \
-               get_current_rep, get_session_rep_info, save_session, confirm_session, get_history
+               get_session_rep_info, count_patient_sessions, save_session, confirm_session, get_history
 from app.models.brain_engine import BrainEngine, SessionInput, CamData, MicData, JointType
 from app.services.camera import WorkoutTracker, start_mjpeg_server, MJPEG_PORT
 
@@ -243,11 +243,8 @@ class Api:
                 if get_session_rep_info(SESSION.patient_id, SESSION.exercise_id)["is_first"]:
                     SESSION.prescribed_rep = actual
 
-            form_score = round((cam_data["speed_score"] + cam_data["rom_score"]) / 2, 1)
-
-            # Tính week_number
-            hist = get_history(SESSION.patient_id, limit=100)
-            week_number = max(1, (len(hist) // 3) + 1)
+            # week_number suy ra từ số buổi đã tập của bệnh nhân (3 buổi ~ 1 tuần)
+            week_number = max(1, (count_patient_sessions(SESSION.patient_id) // 3) + 1)
 
             # Gọi Brain Engine
             rec = BRAIN.analyze(SessionInput(
@@ -259,7 +256,6 @@ class Api:
                     reps_completed = cam_data["reps_completed"],
                     speed_score    = cam_data["speed_score"],
                     rom_score      = cam_data["rom_score"],
-                    form_score     = form_score,
                 ),
                 mic          = MicData(pain_events=pain_count),
                 week_number  = week_number,
@@ -271,7 +267,6 @@ class Api:
                 "prescribed_rep":   SESSION.prescribed_rep,
                 "pain_count":       pain_count,
                 "duration":         duration,
-                "form_score":       form_score,
                 "direction":        rec.direction.value,
                 "current_reps":     rec.current_reps,
                 "suggested_reps":   rec.suggested_reps,

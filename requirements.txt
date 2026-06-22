@@ -1,0 +1,11 @@
+# Thư viện chạy ứng dụng PhụcHồi (cài: pip install -r requirements.txt)
+opencv-python==4.11.0.86
+mediapipe==0.10.33
+numpy==2.2.5
+Pillow==12.1.1
+pywebview==6.2.1
+faster-whisper==1.2.1
+sounddevice==0.5.5
+
+# Chỉ cần khi đóng gói .exe:
+# pyinstaller

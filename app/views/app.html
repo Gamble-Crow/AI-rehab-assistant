@@ -269,10 +269,6 @@
     letter-spacing: 0.5px;
   }
 
-  .video-figure {
-    opacity: 0.85;
-  }
-
   /* Camera */
   .camera-box {
     background: #0a0a0a;
@@ -297,39 +293,6 @@
     letter-spacing: 0.5px;
   }
 
-  .rep-overlay {
-    position: absolute;
-    bottom: 20px;
-    right: 20px;
-    text-align: right;
-  }
-
-  .rep-num {
-    font-size: 72px;
-    font-weight: 700;
-    color: #e8a020;
-    line-height: 1;
-  }
-
-  .rep-of { font-size: 14px; color: #e8a020; opacity: 0.7; margin-top: 4px; }
-
-  .ai-tag {
-    position: absolute;
-    bottom: 20px;
-    left: 16px;
-    background: rgba(62,207,116,0.15);
-    border: 1px solid rgba(62,207,116,0.3);
-    color: #3ecf74;
-    font-size: 11px;
-    padding: 5px 10px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .ai-dot { width: 6px; height: 6px; background: #3ecf74; border-radius: 50%; animation: blink 0.8s infinite; }
-
   /* Sidebar phải */
   .sidebar {
     background: white;
@@ -351,44 +314,6 @@
     margin-bottom: 14px;
   }
 
-  .set-cards {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 8px;
-  }
-
-  .set-c {
-    border: 1.5px solid #e8e8e8;
-    border-radius: 10px;
-    padding: 10px;
-    text-align: center;
-  }
-
-  .set-c.active { border-color: #e8a020; background: #fff8ee; }
-  .set-c.done { border-color: #3ecf74; background: #f0fff6; }
-
-  .set-c-num { font-size: 10px; color: #aaa; font-weight: 600; margin-bottom: 4px; }
-  .set-c.active .set-c-num { color: #e8a020; }
-  .set-c.done .set-c-num { color: #3ecf74; }
-
-  .set-c-val { font-size: 20px; font-weight: 700; color: #ccc; }
-  .set-c.active .set-c-val { color: #e8a020; }
-  .set-c.done .set-c-val { color: #3ecf74; }
-
-  .set-c-sub { font-size: 10px; color: #bbb; margin-top: 2px; }
-
-  .stats-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-
-  .stat-item {
-    background: #f8f8f8;
-    border-radius: 10px;
-    padding: 12px;
-  }
-
-  .stat-item-label { font-size: 10px; color: #aaa; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-  .stat-item-val { font-size: 22px; font-weight: 700; color: #1a1a1a; margin-top: 4px; }
-  .stat-item-sub { font-size: 11px; color: #bbb; margin-top: 2px; }
-
   .voice-row {
     display: flex;
     align-items: center;
@@ -409,27 +334,7 @@
   }
 
   .voice-text { flex: 1; }
-  .voice-title { font-size: 13px; font-weight: 600; }
   .voice-hint { font-size: 11px; color: #666; margin-top: 2px; }
-
-  .ai-note-box {
-    background: #fff8ee;
-    border: 1.5px solid #f0d090;
-    border-radius: 10px;
-    padding: 14px;
-  }
-
-  .ai-note-title {
-    font-size: 12px;
-    font-weight: 700;
-    color: #e8a020;
-    margin-bottom: 6px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .ai-note-text { font-size: 13px; color: #555; line-height: 1.6; }
 
   /* Thông tin buổi tập + video mẫu (cột phải) */
   .info-list { display: flex; flex-direction: column; }
@@ -485,25 +390,6 @@
     cursor: pointer;
   }
   .btn-pause-sm:hover { border-color: #888; }
-
-  .session-bottom-mid { flex: 1; display: flex; justify-content: center; }
-
-  .set-dot { width: 10px; height: 10px; border-radius: 50%; background: #333; }
-  .set-dot.done { background: #3ecf74; }
-  .set-dot.active { background: #e8a020; width: 24px; border-radius: 5px; }
-
-  .btn-next-set {
-    background: #e8a020;
-    color: white;
-    border: none;
-    padding: 10px 22px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .btn-next-set:hover { background: #d4911a; }
-
 
   /* MÀNG HÌNH 4: KẾT THÚC */
   #ket-thuc {
@@ -725,8 +611,6 @@
   <div class="session-bottom">
     <button class="btn-stop-sm" onclick="doEndSession()">■ Kết thúc</button>
     <button class="btn-pause-sm" id="btn-pause" onclick="togglePause()">⏸ Tạm dừng</button>
-    <div class="session-bottom-mid">
-    </div>
   </div>
 </div>
 

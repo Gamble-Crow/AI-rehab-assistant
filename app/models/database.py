@@ -274,6 +274,12 @@ def get_session_rep_info(patient_id: int, exercise_id: int) -> dict:
         cur = 10
     return {"current_rep": cur, "is_first": not has_session}
 
+
+def count_patient_sessions(patient_id: int) -> int:
+    """Tổng số buổi đã lưu của bệnh nhân (mọi bài) — dùng để tính week_number."""
+    row = _one("SELECT COUNT(*) AS n FROM session_log WHERE patient_id=?", (patient_id,))
+    return row["n"] if row else 0
+
 # Tương đương sp_save_session
 def save_session(
     patient_id:       int,

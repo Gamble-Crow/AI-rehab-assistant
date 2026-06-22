@@ -43,7 +43,6 @@ class CamData:
     reps_completed:  int    # Số reps bệnh nhân thực sự hoàn thành
     speed_score:     float  # Chất lượng tốc độ: 0=rất chậm/run, 100=chuẩn
     rom_score:       float  # Range of motion đạt được: 0=rất kém, 100=đầy đủ
-    form_score:      float  # Chất lượng tư thế tổng thể: 0–100
 
 
 @dataclass

@@ -34,50 +34,8 @@ CAM_GAMMA  = 0.78
 _GAMMA_LUT = np.array([((i / 255.0) ** CAM_GAMMA) * 255 for i in range(256)], dtype=np.uint8)
 
 DISPLAY_CONFIG = {
-    "show_exercise_name": True,
-    "show_rep_count":     True,
-    "show_stage":         True,
-    "show_angle":         True,
-    "show_fps":           True,
-    "show_skeleton":      True,
-    "show_bounding_box":  True,
-    "show_timer":         True,
-    "show_confidence":    False,
-}
-
-DEFAULT_EXERCISE = "Gap/duoi khuyu tay"
-
-EXERCISES = {
-    "squat": {
-        "name": "SQUAT", "joints": (23,25,27),
-        "down_angle": 90,  "up_angle": 160,
-        "ideal_rep_seconds": (2.5, 5.0),
-    },
-    "pushup": {
-        "name": "PUSH-UP", "joints": (11,13,15),
-        "down_angle": 70,  "up_angle": 160,
-        "ideal_rep_seconds": (2.0, 4.0),
-    },
-    "lunge": {
-        "name": "LUNGE", "joints": (23,25,27),
-        "down_angle": 85,  "up_angle": 160,
-        "ideal_rep_seconds": (2.5, 5.0),
-    },
-    "Gap/duoi khuyu tay": {
-        "name": "Gap/duoi khuyu tay", "joints": (12,14,16),
-        "down_angle": 35,  "up_angle": 165,
-        "ideal_rep_seconds": (2.0, 4.0),
-    },
-    "truot goi": {
-        "name": "Truot goi", "joints": (23,25,27),
-        "down_angle": 60,  "up_angle": 165,
-        "ideal_rep_seconds": (2.5, 5.0),
-    },
-    "nang chan thang": {
-        "name": "Nang chan thang", "joints": (11,23,25),
-        "down_angle": 145,   "up_angle": 165,
-        "ideal_rep_seconds": (3.0, 6.0),
-    },
+    "show_angle":    True,   # ve so do goc tai khop tren camera
+    "show_skeleton": True,   # ve khung xuong
 }
 
 POSE_CONNECTIONS = [
@@ -87,10 +45,8 @@ POSE_CONNECTIONS = [
 ]
 
 C = {
-    "white":(255,255,255),"black":(0,0,0),"green":(0,210,90),
-    "yellow":(0,220,230),"cyan":(220,200,0),"orange":(0,140,255),
-    "red":(0,60,220),"bg":(30,30,30),"accent":(0,180,255),
-    "skeleton":(50,200,50),"joint":(0,140,255),
+    "white":(255,255,255), "green":(0,210,90), "yellow":(0,220,230),
+    "red":(0,60,220), "skeleton":(50,200,50), "joint":(0,140,255),
 }
 
 # ── Cache model MediaPipe: nap 1 lan, dung lai moi buoi ──
@@ -221,14 +177,6 @@ def calc_angle_3d(a, b, c):
     cos=np.dot(ba,bc)/(np.linalg.norm(ba)*np.linalg.norm(bc)+1e-6)
     return float(np.degrees(np.arccos(np.clip(cos,-1.,1.))))
 
-def rounded_rect(img,x,y,w,h,r,color,alpha=0.7):
-    ov=img.copy()
-    cv2.rectangle(ov,(x+r,y),(x+w-r,y+h),color,-1)
-    cv2.rectangle(ov,(x,y+r),(x+w,y+h-r),color,-1)
-    for cx,cy in [(x+r,y+r),(x+w-r,y+r),(x+r,y+h-r),(x+w-r,y+h-r)]:
-        cv2.circle(ov,(cx,cy),r,color,-1)
-    cv2.addWeighted(ov,alpha,img,1-alpha,0,img)
-
 # ── Vẽ chữ Unicode (tiếng Việt) bằng PIL ──
 _FONT_FILE  = "C:/Windows/Fonts/arial.ttf"
 _FONT_CACHE = {}
@@ -256,9 +204,6 @@ def _draw_texts(img, items):
 
 def txt(img, text, pos, scale, color, thick=2):
     _draw_texts(img, [(text, pos, scale, color, thick)])
-
-def fmt_time(s):
-    return f"{int(s)//60:02d}:{int(s)%60:02d}"
 
 def ensure_model(path=None):
     if path is None: path = config.model("pose_landmarker_full.task")
@@ -325,12 +270,6 @@ class WorkoutTracker:
         if self.t0 is None: return 0.0           # camera chua mo -> chua dem gio
         base=self.pause_start if self.paused else time.time()
         return base-self.t0-self.pause_acc
-
-    def reset(self):
-        k=self.ck; self.reps[k]=0; self.stages[k]=None
-        self._rep_start_time[k]=None; self._min_angle_in_rep[k]=180.0
-        self._rep_speeds[k].clear(); self._rep_roms[k].clear()
-        self._stable_frames[k]=0; self._ready[k]=False
 
     def update_fps(self):
         now=time.time(); self.ftimes.append(now)
