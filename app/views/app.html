@@ -140,8 +140,11 @@
 
   .chon-content {
     flex: 1;
-    padding: 40px 48px;
-    overflow-y: auto;
+    min-height: 0;
+    padding: 32px 48px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
   .chon-content h2 { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
@@ -150,26 +153,36 @@
   .bp-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 40px;
+    grid-template-rows: repeat(2, 1fr);
+    gap: 14px;
+    flex: 1;
+    min-height: 0;
+    margin-bottom: 20px;
   }
 
   .bp-card {
     background: white;
     border: 2px solid #e8e8e8;
     border-radius: 14px;
-    padding: 24px 16px;
+    padding: 16px 14px;
     text-align: center;
     cursor: pointer;
     transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .bp-card:hover { border-color: #e8a020; transform: translateY(-2px); }
   .bp-card.selected { border-color: #e8a020; background: #fff8ee; }
 
-  .bp-icon { font-size: 36px; margin-bottom: 12px; }
-  .bp-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-  .bp-sub { font-size: 12px; color: #888; }
+  .bp-icon { font-size: 34px; margin-bottom: 10px; }
+  .bp-name { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .bp-sub { font-size: 11px; color: #888; line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
   .chon-footer {
     display: flex;
@@ -220,14 +233,16 @@
   .session-main {
     flex: 1;
     display: grid;
-    grid-template-columns: 1fr 1fr 320px;
+    grid-template-columns: 1fr 320px;   /* mặc định: camera | cột thông tin */
     gap: 0;
     overflow: hidden;
   }
 
-  /* Thu ô video mẫu -> camera chiếm chỗ trống để theo dõi động tác */
-  .session-main.video-collapsed { grid-template-columns: 1fr 320px; }
-  .session-main.video-collapsed .video-box { display: none; }
+  /* Phóng to: video mẫu thành cột riêng | camera | cột thông tin */
+  .session-main.video-expanded { grid-template-columns: 1fr 1fr 320px; }
+  #video-slot-big { display: none; }
+  .session-main.video-expanded #video-slot-big { display: flex; }
+  .session-main.video-expanded #video-slot-small { display: none; }
 
   /* Video hướng dẫn */
   .video-box {
@@ -252,7 +267,6 @@
     padding: 4px 12px;
     border-radius: 20px;
     letter-spacing: 0.5px;
-    text-transform: uppercase;
   }
 
   .video-figure {
@@ -281,7 +295,6 @@
     padding: 4px 12px;
     border-radius: 20px;
     letter-spacing: 0.5px;
-    text-transform: uppercase;
   }
 
   .rep-overlay {
@@ -333,9 +346,8 @@
   .sb-label {
     font-size: 10px;
     font-weight: 700;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: #bbb;
+    letter-spacing: 0.5px;
+    color: #999;
     margin-bottom: 14px;
   }
 
@@ -418,6 +430,26 @@
   }
 
   .ai-note-text { font-size: 13px; color: #555; line-height: 1.6; }
+
+  /* Thông tin buổi tập + video mẫu (cột phải) */
+  .info-list { display: flex; flex-direction: column; }
+  .info-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; font-size: 14px; }
+  .info-k { color: #888; }
+  .info-v { font-weight: 700; color: #1a1a1a; font-variant-numeric: tabular-nums; }
+  .info-pain { border-top: 1px solid #f0f0f0; margin-top: 4px; padding-top: 9px; }
+
+  .sb-video { flex: 1; min-height: 130px; display: flex; padding: 12px 16px; }
+  .demo-wrap { position: relative; width: 100%; height: 100%; min-height: 110px;
+    background: #0c0c0c; border-radius: 10px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; }
+  #video-slot-big .demo-wrap { border-radius: 0; }
+  .demo-empty { position: absolute; z-index: 2; color: #777; font-size: 12px; }
+  .vctrl { position: absolute; z-index: 3; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
+  .vbtn { background: transparent; color: #ccc; border: 1px solid #555; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; }
+  .vbtn:hover { border-color: #888; }
+  .vbtn.pri { background: #e8a020; color: #fff; border-color: #e8a020; font-weight: 600; }
+  .vbtn.pri:hover { background: #d4911a; }
+  .vbtn.zoom { border-color: #3ecf74; color: #3ecf74; }
 
   /* Bottom bar */
   .session-bottom {
@@ -603,7 +635,7 @@
     <h2>Chọn bộ phận cần tập</h2>
     <p>Chọn vùng cơ thể bạn muốn tập phục hồi hôm nay</p>
 
-    <div id="ex-grid" class="bp-grid" style="grid-template-columns: repeat(2,1fr); max-width:600px;">
+    <div id="ex-grid" class="bp-grid">
       <!-- Danh sách bài tập được nạp từ DB qua loadExercises() -->
     </div>
 
@@ -630,22 +662,11 @@
     </div>
   </div>
 
-  <!-- Main area — camera rộng mặc định; bấm "Hiện video mẫu" để xem clip -->
-  <div class="session-main video-collapsed">
+  <!-- Main area — camera + cột thông tin; video mẫu nhỏ ở đáy cột, bấm Phóng to để bung -->
+  <div class="session-main" id="session-main">
 
-    <!-- Video hướng dẫn -->
-    <div class="video-box">
-      <div class="video-tag">▶ Video hướng dẫn</div>
-      <video id="demo-video" playsinline preload="metadata"
-             style="position:relative;z-index:1;width:100%;height:100%;object-fit:contain;background:#000;display:block;"></video>
-      <div id="demo-empty" style="position:absolute;z-index:2;color:#777;font-size:13px;">Chọn bài để xem video mẫu</div>
-      <div style="position:absolute;z-index:2;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:10px;">
-        <button onclick="document.getElementById('demo-video').play()"
-                style="background:#e8a020;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">▶ Chạy mẫu</button>
-        <button onclick="document.getElementById('demo-video').pause()"
-                style="background:transparent;color:#ccc;border:1px solid #555;padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer;">■ Dừng</button>
-      </div>
-    </div>
+    <!-- Ô lớn cho video mẫu khi phóng to (mặc định ẩn) -->
+    <div class="video-box" id="video-slot-big"></div>
 
     <!-- Camera -->
     <div class="camera-box">
@@ -655,57 +676,44 @@
            src=""
            alt="Camera"
            style="width:100%;height:100%;object-fit:contain;display:block;"/>
-      <div class="rep-overlay">
-        <div class="rep-num" id="repNum">8</div>
-        <div class="rep-of">/ 15 reps</div>
-      </div>
-      <div class="ai-tag">
-        <div class="ai-dot"></div>
-        AI đang theo dõi
-      </div>
     </div>
 
-    <!-- Sidebar -->
+    <!-- Cột thông tin -->
     <div class="sidebar">
 
-      <!-- Số liệu -->
+      <!-- Thông tin buổi tập -->
       <div class="sb-section">
-        <div class="sb-label">Số liệu</div>
-        <div class="stats-2col">
-          <div class="stat-item">
-            <div class="stat-item-label">Tổng reps</div>
-            <div class="stat-item-val" id="totalReps">23</div>
-            <div class="stat-item-sub">mục tiêu 45</div>
-          </div>
-          <!-- <div class="stat-item">
-            <div class="stat-item-label">Tư thế</div>
-            <div class="stat-item-val" style="color:#3ecf74">94%</div>
-            <div class="stat-item-sub">chính xác</div>
-          </div>-->
+        <div class="sb-label">Buổi tập</div>
+        <div class="info-list">
+          <div class="info-row"><span class="info-k">Số lần</span><span class="info-v" id="statReps" style="color:#e8a020">0 / 10</span></div>
+          <div class="info-row"><span class="info-k">Pha</span><span class="info-v" id="statPhase">—</span></div>
+          <div class="info-row"><span class="info-k">Góc</span><span class="info-v" id="statAngle">—</span></div>
+          <div class="info-row info-pain"><span class="info-k">Số lần kêu đau</span><span class="info-v" id="statPain" style="color:#e24b4a">0</span></div>
         </div>
       </div>
 
-      <!-- Voice -->
+      <!-- Giọng nói -->
       <div class="sb-section">
         <div class="sb-label">Giọng nói</div>
         <div class="voice-row">
           <div class="voice-icon-box">🎙️</div>
           <div class="voice-text">
-            <div class="voice-title">Đang lắng nghe</div>
             <div class="voice-hint">Nói "đau" để dừng ngay</div>
           </div>
         </div>
       </div>
 
-      <!-- AI -->
-      <div class="sb-section">
-        <div class="sb-label">Bộ não AI</div>
-        <div class="ai-note-box">
-          <div class="ai-note-title">🤖 Nhận xét</div>
-          <div class="ai-note-text">
-            Tư thế set 1 tốt. Nhịp thở đều.<br>
-            Cường độ hiện tại: <strong>62%</strong><br>
-            Dựa trên buổi trước, AI đề xuất tăng lên 15 reps ở set tới.
+      <!-- Video mẫu (nhỏ) — slot mặc định chứa #demo-wrap -->
+      <div class="sb-section sb-video" id="video-slot-small">
+        <div id="demo-wrap" class="demo-wrap">
+          <div class="video-tag">▶ Video hướng dẫn</div>
+          <video id="demo-video" playsinline preload="metadata"
+                 style="width:100%;height:100%;object-fit:contain;background:#000;display:block;"></video>
+          <div id="demo-empty" class="demo-empty">Chọn bài để xem video mẫu</div>
+          <div class="vctrl">
+            <button class="vbtn pri" onclick="demoPlay()">▶ Chạy</button>
+            <button class="vbtn" onclick="demoPause()">■ Dừng</button>
+            <button class="vbtn zoom" id="btn-zoom-video" onclick="toggleVideoBox()">⤢ Phóng to</button>
           </div>
         </div>
       </div>
@@ -717,7 +725,6 @@
   <div class="session-bottom">
     <button class="btn-stop-sm" onclick="doEndSession()">■ Kết thúc</button>
     <button class="btn-pause-sm" id="btn-pause" onclick="togglePause()">⏸ Tạm dừng</button>
-    <button class="btn-pause-sm" id="btn-toggle-video" onclick="toggleVideoBox()">⊞ Hiện video mẫu</button>
     <div class="session-bottom-mid">
     </div>
   </div>
@@ -728,8 +735,8 @@
 <div id="ket-thuc" class="screen">
   <div class="result-box">
     <div class="result-header">
-      <div class="result-icon">🎉</div>
-      <h2>Hoàn thành buổi tập!</h2>
+      <div class="result-icon" id="resultIcon">🎉</div>
+      <h2 id="resultTitle">Hoàn thành buổi tập!</h2>
       <p id="resultMeta">—</p>
     </div>
 
@@ -766,10 +773,13 @@
       </div>
     </div>
 
-    <div class="result-actions">
+    <div class="result-actions" id="actions-normal">
       <!-- Bệnh nhân đồng ý → lưu DB | không đồng ý → giữ nguyên -->
       <button class="btn-secondary" onclick="saveResult(false)">Giữ nguyên</button>
       <button class="btn-primary" onclick="saveResult(true)">✓ Đồng ý & Lưu lại</button>
+    </div>
+    <div class="result-actions" id="actions-retry" style="display:none;">
+      <button class="btn-primary" onclick="retrySession()">↻ Tập lại</button>
     </div>
   </div>
 </div>
@@ -919,7 +929,7 @@ function loadExercises(exercises) {
     card.innerHTML = `
       <div class="bp-icon">${icon}</div>
       <div class="bp-name">${ex.ten}</div>
-      <div class="bp-sub">${ex.khop_tap} · ${ex.huong_dan.slice(0,40)}...</div>
+      <div class="bp-sub">${ex.khop_tap} · ${ex.huong_dan.slice(0,30)}...</div>
     `;
     card.onclick = () => selectExercise(card, ex);
     grid.appendChild(card);
@@ -933,11 +943,14 @@ async function selectExercise(card, ex) {
   const btn = document.getElementById('btn-start');
   if (btn) btn.disabled = false;
 
-  // Lấy prescribed_rep từ DB
+  // Lấy số rep + cờ buổi đầu từ DB
   try {
     const data = await call('get_current_rep', ex.id);
     const inp  = document.getElementById('inp-rep');
-    if (inp) inp.value = data.current_rep;
+    if (inp) {
+      inp.value    = data.current_rep;
+      inp.disabled = !data.is_first;   // buổi 2 trở đi: AI quyết định → khóa input
+    }
   } catch(e) {}
 }
 
@@ -981,16 +994,24 @@ async function doStartSession() {
     }
 
     goTo('tap');
-     // reset so lieu cho buoi moi
-    ['repNum','totalReps'].forEach(id => {
-      const el = document.getElementById(id); if (el) el.textContent = '0';
-    });
-    const note = document.querySelector('.ai-note-text');
-    if (note) note.textContent = 'Đang theo dõi…';
-    const goal = document.querySelector('.stat-item-sub');
-    if (goal) goal.textContent = 'mục tiêu ' + S.prescribedRep;
-    _startTimer();
-    toast('📷 Camera đã khởi động');
+    // reset số liệu cho buổi mới
+    setText('statReps', '0 / ' + S.prescribedRep);
+    setText('statPhase', '—');
+    setText('statAngle', '—');
+    setText('statPain', '0');
+    // đưa video mẫu về dạng nhỏ trong cột
+    const _sm = document.getElementById('video-slot-small');
+    const _wrap = document.getElementById('demo-wrap');
+    if (_sm && _wrap) _sm.appendChild(_wrap);
+    const _main = document.getElementById('session-main');
+    if (_main) _main.classList.remove('video-expanded');
+    const _zb = document.getElementById('btn-zoom-video');
+    if (_zb) _zb.textContent = '⤢ Phóng to';
+    // Đồng hồ chỉ bắt đầu khi camera thật sự mở (backend gọi onCameraReady)
+    const tEl = document.getElementById('timer');
+    if (tEl) tEl.textContent = '00:00';
+    S.seconds = 0; S.paused = false; clearInterval(S.timerInt);
+    toast('📷 Đang mở camera…');
   } catch(e) {}
 }
 
@@ -1009,6 +1030,12 @@ function _startTimer() {
   }, 1000);
 }
 
+// Backend gọi khi camera thật sự mở (khung hình đầu tiên) → mới bắt đầu đếm giờ
+function onCameraReady() {
+  _startTimer();
+  toast('📷 Camera đã sẵn sàng');
+}
+
 // Tạm dừng → window.pywebview.api.toggle_pause()
 async function togglePause() {
   S.paused = !S.paused;
@@ -1017,29 +1044,53 @@ async function togglePause() {
   try { await call('toggle_pause'); } catch(e) {}
 }
 
-// Thu/phóng ô video mẫu để mở rộng camera theo dõi động tác
+function setText(id, t) { const e = document.getElementById(id); if (e) e.textContent = t; }
+
+// Chạy / dừng video mẫu (hoạt động ở cả 2 trạng thái)
+function demoPlay()  { const v = document.getElementById('demo-video'); if (v) v.play(); }
+function demoPause() { const v = document.getElementById('demo-video'); if (v) v.pause(); }
+
+// Phóng to / thu nhỏ video mẫu: chuyển #demo-wrap giữa đáy cột và cột lớn
 function toggleVideoBox() {
-  const main = document.querySelector('.session-main');
-  if (!main) return;
-  const collapsed = main.classList.toggle('video-collapsed');
-  const btn = document.getElementById('btn-toggle-video');
-  if (btn) btn.textContent = collapsed ? '⊞ Hiện video mẫu' : '⊟ Ẩn video mẫu';
-  const demo = document.getElementById('demo-video');
-  if (collapsed && demo) demo.pause();   // ẩn thì dừng video
+  const main  = document.getElementById('session-main');
+  const wrap  = document.getElementById('demo-wrap');
+  const big   = document.getElementById('video-slot-big');
+  const small = document.getElementById('video-slot-small');
+  const zb    = document.getElementById('btn-zoom-video');
+  if (!main || !wrap) return;
+  const expanding = !main.classList.contains('video-expanded');
+  if (expanding) {
+    big.appendChild(wrap);
+    main.classList.add('video-expanded');
+    if (zb) zb.textContent = '⤡ Thu nhỏ';
+  } else {
+    small.appendChild(wrap);
+    main.classList.remove('video-expanded');
+    if (zb) zb.textContent = '⤢ Phóng to';
+  }
 }
 
-// updateRepCount — Python gọi qua evaluate_js
-// Python: _window.evaluate_js(f"updateRepCount({rep}, {total}, {pain})")
+// updateRepCount — Python gọi mỗi khi có rep mới: cập nhật Số lần + Số lần kêu đau + nhấp nháy
 function updateRepCount(rep, total, pain = 0) {
-  const repNum = document.getElementById('repNum');
-  const totalReps = document.getElementById('totalReps');
-  if (repNum)   { repNum.textContent = rep;   repNum.style.color='#fff'; setTimeout(()=>repNum.style.color='#e8a020',180); }
-  if (totalReps) totalReps.textContent = total;
-
-  if (pain > 0) {
-    const aiNote = document.querySelector('.ai-note-text');
-    if (aiNote) aiNote.innerHTML = `⚠ Phát hiện <strong>${pain}</strong> lần kêu đau. Đang theo dõi...`;
+  const r = document.getElementById('statReps');
+  if (r) {
+    r.textContent = rep + ' / ' + S.prescribedRep;
+    r.style.color = '#3ecf74';
+    setTimeout(() => { r.style.color = '#e8a020'; }, 180);
   }
+  setText('statPain', pain);
+}
+
+// updateStats — Python gọi ~5 lần/giây: cập nhật Số lần / Pha / Góc / Số lần kêu đau
+function updateStats(rep, total, phase, angle, pain) {
+  setText('statReps', rep + ' / ' + S.prescribedRep);
+  const ph = document.getElementById('statPhase');
+  if (ph) {
+    ph.textContent = phase;
+    ph.style.color = phase === 'Duỗi' ? '#3ecf74' : (phase === 'Gập' ? '#e8a020' : '#888');
+  }
+  setText('statAngle', (angle == null ? '—' : angle + '°'));
+  setText('statPain', pain);
 }
 
 // Kết thúc → window.pywebview.api.end_session()
@@ -1062,6 +1113,19 @@ async function doEndSession() {
 
 function showResult(data) {
   window._pendingResult = data;
+
+  // Ca 0 rep (retry): đổi tiêu đề, ẩn đề xuất + nút đồng ý, hiện nút Tập lại
+  const isRetry   = data.direction === 'retry';
+  const icon      = document.getElementById('resultIcon');
+  const title     = document.getElementById('resultTitle');
+  const suggestBox= document.querySelector('.ai-suggest');
+  const actNormal = document.getElementById('actions-normal');
+  const actRetry  = document.getElementById('actions-retry');
+  if (icon)       icon.textContent  = isRetry ? '⚠️' : '🎉';
+  if (title)      title.textContent = isRetry ? 'Chưa ghi nhận rep nào — cần tập lại' : 'Hoàn thành buổi tập!';
+  if (suggestBox) suggestBox.style.display = isRetry ? 'none' : '';
+  if (actNormal)  actNormal.style.display  = isRetry ? 'none' : '';
+  if (actRetry)   actRetry.style.display   = isRetry ? ''     : 'none';
 
   const now = new Date().toLocaleDateString('vi-VN',
     {weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'});
@@ -1093,6 +1157,12 @@ function showResult(data) {
   if (sugVal) sugVal.textContent = (data.suggested_reps ?? '—') + ' reps';
 
   goTo('ket-thuc');
+}
+
+// Ca 0 rep: không lưu gì, tập lại đúng bài đang chọn
+function retrySession() {
+  window._pendingResult = null;
+  doStartSession();
 }
 
 // Nút đồng ý / từ chối → window.pywebview.api.save_result()

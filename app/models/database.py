@@ -249,6 +249,31 @@ def get_current_rep(patient_id: int, exercise_id: int) -> int:
     """, (patient_id, exercise_id))
     return row["current_rep"] if row else 10
 
+def get_session_rep_info(patient_id: int, exercise_id: int) -> dict:
+    """
+    Phục vụ khóa input rep + xác định "buổi 1".
+      - is_first = True nếu CHƯA có buổi tập nào được lưu (session_log rỗng) cho cặp này
+                   → cho phép tự chọn rep; từ buổi 2 → khóa input, AI quyết định.
+      - current_rep = số rep hiện tại: ưu tiên current_config; chưa có thì lấy
+                      prescribed_rep của buổi gần nhất; mặc định 10.
+    """
+    cnt = _one("""SELECT COUNT(*) AS n FROM session_log
+                  WHERE patient_id=? AND exercise_id=?""", (patient_id, exercise_id))
+    has_session = (cnt["n"] if cnt else 0) > 0
+
+    cc = _one("""SELECT current_rep FROM current_config
+                 WHERE patient_id=? AND exercise_id=?""", (patient_id, exercise_id))
+    if cc:
+        cur = cc["current_rep"]
+    elif has_session:
+        last = _one("""SELECT prescribed_rep FROM session_log
+                       WHERE patient_id=? AND exercise_id=?
+                       ORDER BY session_log_id DESC LIMIT 1""", (patient_id, exercise_id))
+        cur = last["prescribed_rep"] if last else 10
+    else:
+        cur = 10
+    return {"current_rep": cur, "is_first": not has_session}
+
 # Tương đương sp_save_session
 def save_session(
     patient_id:       int,

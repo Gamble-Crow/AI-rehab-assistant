@@ -8,7 +8,7 @@ import webview   # pip install pywebview
 
 from app.config import view, data
 from app.models.database import init_db, get_patients, get_exercises, get_exercise, \
-               get_current_rep, save_session, confirm_session, get_history
+               get_current_rep, get_session_rep_info, save_session, confirm_session, get_history
 from app.models.brain_engine import BrainEngine, SessionInput, CamData, MicData, JointType
 from app.services.camera import WorkoutTracker, start_mjpeg_server, MJPEG_PORT
 
@@ -80,8 +80,8 @@ class Api:
     # 3. Lấy cường độ hiện tại khi chọn bài tập
     def get_current_rep(self, exercise_id: int) -> dict:
         try:
-            rep = get_current_rep(SESSION.patient_id, int(exercise_id))
-            return {"ok": True, "data": {"current_rep": rep}}
+            info = get_session_rep_info(SESSION.patient_id, int(exercise_id))
+            return {"ok": True, "data": info}   # {current_rep, is_first}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -115,6 +115,12 @@ class Api:
             tracker = WorkoutTracker(config)
             SESSION.tracker = tracker
 
+            # Báo UI khi camera thật sự mở (khung hình đầu tiên) → mới bắt đầu đếm giờ
+            def on_ready():
+                try: _window.evaluate_js("onCameraReady()")
+                except Exception: pass
+            tracker.on_ready = on_ready
+
             # Callback: mỗi rep → evaluate_js về UI
             def on_rep(rep_cur: int, total: int):
                 pain = SESSION.pain_counter.pain_count \
@@ -127,6 +133,17 @@ class Api:
                     pass
 
             tracker.on_rep = on_rep
+
+            # Callback throttle: đẩy số liệu sống (rep/pha/góc/đau) lên cột thông tin
+            def on_stats(rep_cur, total, phase, angle, ready):
+                pain = SESSION.pain_counter.pain_count if SESSION.pain_counter else 0
+                js = (f"updateStats({rep_cur}, {total}, "
+                      f"{json.dumps(phase, ensure_ascii=False)}, {angle}, {pain})")
+                try:
+                    _window.evaluate_js(js)
+                except Exception:
+                    pass
+            tracker.on_stats = on_stats
 
             # Chạy camera trong thread riêng
             def cam_loop():
@@ -199,6 +216,33 @@ class Api:
             elapsed = int(SESSION.tracker.elapsed()) if SESSION.tracker \
                       else int(time.time() - SESSION.start_time)
             duration = f"{elapsed//60:02d}:{elapsed%60:02d}"
+
+            actual = cam_data["reps_completed"]
+
+            # Ca 2.1: 0 rep → bỏ hẳn, không lưu, không gọi brain, yêu cầu tập lại
+            if actual == 0:
+                SESSION.last_rec = None
+                retry = {
+                    "direction":      "retry",
+                    "reps_completed": 0,
+                    "prescribed_rep": SESSION.prescribed_rep,
+                    "pain_count":     pain_count,
+                    "duration":       duration,
+                    "exercise_name":  SESSION.exercise_name,
+                }
+                try:
+                    _window.evaluate_js(f"showResult({json.dumps(retry, ensure_ascii=False)})")
+                except Exception:
+                    pass
+                return {"ok": True, "data": retry}
+
+            # Ca 2.2: BUỔI 1 (chưa có session_log cho bài này) + tập thiếu số đã chọn
+            # → hạ mục tiêu = số rep đã tập, lưu actual/actual làm dữ liệu nền.
+            # Phần điều chỉnh còn lại do brain engine xử lý NHƯ CŨ (không sửa brain_engine.py).
+            if actual < SESSION.prescribed_rep:
+                if get_session_rep_info(SESSION.patient_id, SESSION.exercise_id)["is_first"]:
+                    SESSION.prescribed_rep = actual
+
             form_score = round((cam_data["speed_score"] + cam_data["rom_score"]) / 2, 1)
 
             # Tính week_number

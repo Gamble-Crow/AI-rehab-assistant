@@ -290,9 +290,10 @@ class WorkoutTracker:
         self.stages = {k: None for k in keys}
         self.angle  = 0.0
 
-        self.t0=time.time(); self.paused=False
+        self.t0=None;        self.paused=False   # t0 dat khi khung hinh dau tien ve (camera that su mo)
         self.pause_acc=0.0;  self.pause_start=0.0
         self.fps=0;          self.ftimes=[]
+        self.on_ready=None   # callback goi 1 lan khi camera san sang (frame dau tien)
 
         self._rep_start_time   = {k: None  for k in keys}
         self._min_angle_in_rep = {k: 180.0 for k in keys}
@@ -305,6 +306,8 @@ class WorkoutTracker:
 
         self._stop  = False
         self.on_rep = None   # callback(rep_current, total)
+        self.on_stats = None # callback(rep,total,phase,angle,ready) - day so lieu sang UI (throttle)
+        self._last_stats = 0.0
 
         print("[INFO] Tracker ready:", config.get("name"))
 
@@ -319,6 +322,7 @@ class WorkoutTracker:
         else:                self.paused=False; self.pause_acc+=time.time()-self.pause_start
 
     def elapsed(self):
+        if self.t0 is None: return 0.0           # camera chua mo -> chua dem gio
         base=self.pause_start if self.paused else time.time()
         return base-self.t0-self.pause_acc
 
@@ -415,48 +419,13 @@ class WorkoutTracker:
             cv2.circle(frame,p,4,C["white"],1)
 
     def draw_ui(self, frame, flash=False):
-        H,W=frame.shape[:2]; k=self.ck
-        rounded_rect(frame,10,10,300,210,12,C["bg"],0.75)
-        items=[]            # gom chữ -> vẽ 1 lần (tiếng Việt, PIL)
-        y=45
-        if DISPLAY_CONFIG["show_exercise_name"]:
-            items.append((self.ce["name"][:24],(20,y),0.5,C["accent"],2)); y+=24
-        if DISPLAY_CONFIG["show_rep_count"]:
-            items.append((f"Số lần: {self.reps[k]}",(20,y+30),1.2,
-                          C["yellow"] if flash else C["green"],3)); y+=65
-        if not self._ready[k]:
-            pct=int((self._stable_frames[k]/self.STABLE_FRAMES_REQUIRED)*80)
-            cv2.rectangle(frame,(20,y),(100,y+12),(60,60,60),-1)
-            cv2.rectangle(frame,(20,y),(20+pct,y+12),C["orange"],-1)
-            items.append((f"Đang ổn định {self._stable_frames[k]}/{self.STABLE_FRAMES_REQUIRED}",
-                          (20,y+28),0.45,C["orange"],1)); y+=42
-        else:
-            items.append(("Sẵn sàng",(20,y),0.6,C["green"],2)); y+=26
-        if DISPLAY_CONFIG["show_stage"]:
-            stage=self.stages[k]
-            st_vi={"up":"Duỗi","down":"Gập"}.get(stage,"—")
-            items.append((f"Pha: {st_vi}",(20,y),0.55,
-                          C["green"] if stage=="up" else C["orange"],2)); y+=28
-        if DISPLAY_CONFIG["show_angle"]:
-            items.append((f"Góc: {int(self.angle)}°",(20,y),0.55,C["yellow"],2)); y+=28
-        if DISPLAY_CONFIG["show_timer"]:
-            tl="Tạm dừng" if self.paused else fmt_time(self.elapsed())
-            items.append((f"Thời gian: {tl}",(20,y),0.55,
-                          C["red"] if self.paused else C["cyan"],2))
-        if DISPLAY_CONFIG["show_fps"]:
-            items.append((f"FPS: {self.fps}",(W-120,35),0.55,C["white"],2))
-        ex=self.ce; bx,by,bw,bh=20,H-50,260,16
-        norm=np.clip((self.angle-ex["down_angle"]+10)/(ex["up_angle"]-ex["down_angle"]+20),0,1)
-        rounded_rect(frame,bx-4,by-4,bw+8,bh+8,6,C["bg"],0.7)
-        cv2.rectangle(frame,(bx,by),(bx+bw,by+bh),(60,60,60),-1)
-        cv2.rectangle(frame,(bx,by),(bx+int(norm*bw),by+bh),
-                      C["green"] if self.stages[k]=="up" else C["orange"],-1)
-        items.append(("Biên độ góc",(bx,by-8),0.42,C["white"],1))
+        # Thong tin buoi tap (so lan/pha/goc/dau) da chuyen sang cot phai cua giao dien (HTML).
+        # Tren camera chi giu hieu ung flash xanh khi co rep moi -> khung hinh thoang.
         if flash:
+            H,W=frame.shape[:2]
             ov=frame.copy()
             cv2.rectangle(ov,(0,0),(W,H),C["green"],-1)
             cv2.addWeighted(ov,0.12,frame,0.88,0,frame)
-        _draw_texts(frame, items)
 
     def run(self):
         """
@@ -484,6 +453,12 @@ class WorkoutTracker:
         while not self._stop:
             ret,frame=cap.read()
             if not ret: time.sleep(0.05); continue
+
+            if self.t0 is None:                 # khung hinh dau tien -> camera that su mo
+                self.t0=time.time()
+                if self.on_ready:
+                    try: self.on_ready()
+                    except Exception: pass
 
             frame=cv2.flip(frame,1)
             frame=cv2.LUT(frame, _GAMMA_LUT)
@@ -528,6 +503,17 @@ class WorkoutTracker:
                 if DISPLAY_CONFIG["show_angle"]:
                     txt(frame,f"{int(self.angle)}",(pb[0]+12,pb[1]-12),0.65,C["yellow"],2)
                 self.draw_skeleton(frame,lms,wc,hc,off)
+
+            now=time.time()
+            if self.on_stats and now-self._last_stats>=0.2:
+                self._last_stats=now
+                k=self.ck; st=self.stages[k]
+                if not self._ready[k]:  phase="Đang ổn định"
+                elif st=="up":          phase="Duỗi"
+                elif st=="down":        phase="Gập"
+                else:                   phase="—"
+                try: self.on_stats(self.reps[k], sum(self.reps.values()), phase, int(self.angle), self._ready[k])
+                except Exception: pass
 
             if flash_n>0: flash_n-=1
             self.draw_ui(frame,flash=(flash_n>0))
